@@ -22,6 +22,9 @@ WEB = Path(__file__).resolve().parent.parent / "web"
 
 app = FastAPI(title="Jarvis")
 app.mount("/static", StaticFiles(directory=str(WEB)), name="static")
+# Generated images and models, so the HUD can display what Jarvis just made.
+# StaticFiles refuses paths that escape the directory.
+app.mount("/files", StaticFiles(directory=str(cfg.images_dir.parent)), name="files")
 
 _agent: Agent | None = None
 
@@ -51,6 +54,8 @@ async def status() -> JSONResponse:
                 "calendar": cfg.microsoft_enabled,
                 "search": True,
                 "brave": bool(cfg.brave_api_key),
+                "images": cfg.images_enabled,
+                "threed": cfg.tripo_enabled,
             },
             "tools": registry.describe(),
             "spend": {

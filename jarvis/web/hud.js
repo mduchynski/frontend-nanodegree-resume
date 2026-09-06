@@ -517,6 +517,14 @@ function handle(msg) {
         line.textContent = `> ${msg.detail}`;
         UI.transcript.appendChild(line);
         UI.transcript.scrollTop = UI.transcript.scrollHeight;
+      } else if (msg.phase === 'progress') {
+        // Long jobs (3D generation) narrate themselves in place.
+        const lines = UI.transcript.querySelectorAll(`.tool-line[data-tool="${msg.name}"]`);
+        const last = lines[lines.length - 1];
+        if (last) {
+          last.textContent = `> ${msg.detail}`;
+          UI.stateDetail.textContent = msg.detail;
+        }
       } else {
         const lines = UI.transcript.querySelectorAll(`.tool-line[data-tool="${msg.name}"]`);
         const last = lines[lines.length - 1];
@@ -527,6 +535,10 @@ function handle(msg) {
       }
       break;
     }
+
+    case 'artifact':
+      showArtifact(msg);
+      break;
 
     case 'confirm':
       pendingConfirm = msg.id;
@@ -562,6 +574,64 @@ function handle(msg) {
       setTimeout(() => setState('idle'), 2500);
       break;
   }
+}
+
+/** Render a generated image or 3D model into the transcript. */
+function showArtifact({ kind, label, url, path }) {
+  const box = document.createElement('div');
+  box.className = `artifact ${kind}`;
+
+  // For a model, `url` is the mesh download and `path` is Tripo's rendered
+  // preview image, when it gave us one.
+  const preview = kind === 'image' ? url : path;
+
+  if (preview) {
+    const img = document.createElement('img');
+    img.src = preview;
+    img.alt = label || kind;
+    img.loading = 'lazy';
+    img.addEventListener('click', () => {
+      document.getElementById('viewer-img').src = preview;
+      document.getElementById('viewer').classList.add('show');
+    });
+    img.style.cursor = 'zoom-in';
+    box.appendChild(img);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'placeholder';
+    ph.textContent = '3D MODEL READY';
+    box.appendChild(ph);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+
+  const k = document.createElement('span');
+  k.className = 'kind';
+  k.textContent = kind === 'image' ? 'IMAGE' : 'MODEL';
+  meta.appendChild(k);
+
+  const l = document.createElement('span');
+  l.className = 'label';
+  l.textContent = label || '';
+  l.title = label || '';
+  meta.appendChild(l);
+
+  if (url) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.textContent = kind === 'image' ? 'OPEN' : 'DOWNLOAD';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    if (kind === 'image') a.download = '';
+    meta.appendChild(a);
+  }
+
+  box.appendChild(meta);
+  UI.transcript.appendChild(box);
+  UI.transcript.scrollTop = UI.transcript.scrollHeight;
+  // A new artifact starts a fresh reply bubble, so text after it is separate.
+  currentBubble = null;
 }
 
 function send(text) {
@@ -680,10 +750,19 @@ UI.compose.addEventListener('keydown', (event) => {
   }
 });
 
+document.getElementById('viewer').addEventListener('click', () => {
+  document.getElementById('viewer').classList.remove('show');
+});
+
 document.getElementById('confirm-yes').addEventListener('click', () => answerConfirm(true));
 document.getElementById('confirm-no').addEventListener('click', () => answerConfirm(false));
 
 document.addEventListener('keydown', (event) => {
+  const viewer = document.getElementById('viewer');
+  if (event.key === 'Escape' && viewer.classList.contains('show')) {
+    viewer.classList.remove('show');
+    return;
+  }
   if (pendingConfirm) {
     if (event.key === 'Enter') answerConfirm(true);
     if (event.key === 'Escape') answerConfirm(false);
@@ -703,6 +782,8 @@ fetch('/api/status')
     document.getElementById('cap-email').classList.toggle('on', s.capabilities.email);
     document.getElementById('cap-cal').classList.toggle('on', s.capabilities.calendar);
     document.getElementById('cap-search').classList.toggle('on', s.capabilities.search);
+    document.getElementById('cap-image').classList.toggle('on', s.capabilities.images);
+    document.getElementById('cap-3d').classList.toggle('on', s.capabilities.threed);
     UI.spend.textContent = `$${(s.spend.month_usd || 0).toFixed(4)} / mo`;
     UI.greeting.textContent = `online // ${s.user}`;
     if (!s.capabilities.email) note('Gmail is not connected. Run setup_google.py to enable mail.');

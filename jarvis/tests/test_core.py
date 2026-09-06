@@ -1,7 +1,7 @@
-import asyncio, sys, types
+import sys, types
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 
-from core.models import route, cost_usd, FAST, DEEP
+from core.models import cost_usd, route
 from core.memory import Store, _repair
 
 print("=== routing ===")

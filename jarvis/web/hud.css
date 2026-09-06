@@ -336,3 +336,70 @@ button.ctl.active { color: var(--bg); background: var(--cyan); border-color: var
   #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr 200px auto; }
   #panel { border-left: none; border-top: 1px solid var(--cyan-faint); }
 }
+
+/* ---------------- artifacts (generated images / 3D models) --------------- */
+
+.artifact {
+  margin: 10px 0 16px;
+  border: 1px solid var(--cyan-faint);
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(79, 214, 255, 0.035);
+  animation: rise 0.4s ease-out;
+}
+.artifact img {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  background: #05090f;
+}
+.artifact .meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  border-top: 1px solid var(--cyan-faint);
+}
+.artifact .meta .kind { color: var(--cyan); white-space: nowrap; }
+.artifact .meta .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.artifact .meta a { color: var(--amber); text-decoration: none; white-space: nowrap; }
+.artifact .meta a:hover { text-decoration: underline; }
+
+.artifact.model .placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96px;
+  color: var(--cyan-dim);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+}
+
+/* Full-size viewer */
+#viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 5, 9, 0.93);
+  cursor: zoom-out;
+}
+#viewer.show { display: flex; }
+#viewer img {
+  max-width: 92vw;
+  max-height: 88vh;
+  border: 1px solid var(--cyan-faint);
+  box-shadow: 0 0 80px rgba(79, 214, 255, 0.18);
+}

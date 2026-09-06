@@ -2,7 +2,54 @@
 from __future__ import annotations
 
 import inspect
+import logging
+from contextvars import ContextVar
 from typing import Any
+
+log = logging.getLogger("jarvis.tools")
+
+# Channel back to the HUD while a tool is still running. Set by the agent for
+# the duration of one tool call. A ContextVar rather than an attribute because
+# tools are shared singletons and several may be running concurrently --
+# asyncio copies the context per task, so each call gets its own callback.
+_progress: ContextVar = ContextVar("jarvis_progress", default=None)
+_artifacts: ContextVar = ContextVar("jarvis_artifacts", default=None)
+
+
+def bind_channel(progress, artifact):
+    """Attach both callbacks for the current task. Returns reset tokens."""
+    return _progress.set(progress), _artifacts.set(artifact)
+
+
+def release_channel(tokens) -> None:
+    progress_token, artifact_token = tokens
+    _progress.reset(progress_token)
+    _artifacts.reset(artifact_token)
+
+
+async def report(text: str) -> None:
+    """Tell the user what a slow tool is doing right now.
+
+    Never let a status update break the tool it is reporting on.
+    """
+    callback = _progress.get()
+    if callback is None:
+        return
+    try:
+        await callback(text)
+    except Exception:  # noqa: BLE001
+        log.debug("progress callback failed", exc_info=True)
+
+
+async def produce(kind: str, label: str, url: str = "", path: str = "") -> None:
+    """Hand the HUD something to display -- an image, a 3D model, a file."""
+    callback = _artifacts.get()
+    if callback is None:
+        return
+    try:
+        await callback({"kind": kind, "label": label, "url": url, "path": path})
+    except Exception:  # noqa: BLE001
+        log.debug("artifact callback failed", exc_info=True)
 
 
 class ToolError(Exception):

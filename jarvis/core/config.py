@@ -12,6 +12,10 @@ load_dotenv(ROOT / ".env")
 
 DATA_DIR = ROOT / "data"
 DATA_DIR.mkdir(exist_ok=True)
+IMAGES_DIR = DATA_DIR / "images"
+MODELS_DIR = DATA_DIR / "models"
+IMAGES_DIR.mkdir(exist_ok=True)
+MODELS_DIR.mkdir(exist_ok=True)
 
 
 def _path(env_key: str, default: str) -> Path:
@@ -37,6 +41,23 @@ class Config:
         default_factory=lambda: _path("GOOGLE_TOKEN_FILE", "token_google.json")
     )
 
+    # --- image generation ---
+    image_provider: str = os.getenv("JARVIS_IMAGE_PROVIDER", "fal").strip().lower()
+    fal_key: str = os.getenv("FAL_KEY", "")
+    together_api_key: str = os.getenv("TOGETHER_API_KEY", "")
+    together_image_model: str = os.getenv(
+        "TOGETHER_IMAGE_MODEL", "black-forest-labs/FLUX.1-schnell-Free"
+    )
+
+    # --- Tripo3D ---
+    tripo_api_key: str = os.getenv("TRIPO_API_KEY", "")
+    tripo_base_url: str = os.getenv(
+        "TRIPO_BASE_URL", "https://openapi.tripo3d.ai/v3"
+    ).rstrip("/")
+    tripo_model_version: str = os.getenv("TRIPO_MODEL_VERSION", "v3.1-20260211")
+    # How long a turn will wait for a 3D job before handing back a job id.
+    tripo_wait_seconds: int = int(os.getenv("TRIPO_WAIT_SECONDS", "240"))
+
     ms_client_id: str = os.getenv("MS_CLIENT_ID", "")
     ms_tenant_id: str = os.getenv("MS_TENANT_ID", "common")
     ms_token_file: Path = field(
@@ -50,6 +71,8 @@ class Config:
     timezone: str = os.getenv("JARVIS_TIMEZONE", "America/New_York")
 
     db_path: Path = DATA_DIR / "jarvis.sqlite3"
+    images_dir: Path = IMAGES_DIR
+    models_dir: Path = MODELS_DIR
 
     @property
     def google_enabled(self) -> bool:
@@ -58,6 +81,18 @@ class Config:
     @property
     def microsoft_enabled(self) -> bool:
         return bool(self.ms_client_id) and self.ms_token_file.exists()
+
+    @property
+    def images_enabled(self) -> bool:
+        if self.image_provider == "fal":
+            return bool(self.fal_key)
+        if self.image_provider == "together":
+            return bool(self.together_api_key)
+        return False
+
+    @property
+    def tripo_enabled(self) -> bool:
+        return bool(self.tripo_api_key)
 
 
 cfg = Config()

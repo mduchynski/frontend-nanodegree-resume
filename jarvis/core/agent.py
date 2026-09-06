@@ -8,6 +8,7 @@ from typing import Awaitable, Callable
 import anthropic
 
 from tools import ToolError, registry
+from tools.base import bind_channel, release_channel
 
 from .config import cfg
 from .memory import store
@@ -210,6 +211,15 @@ class Agent:
         if tool is None:
             return _error_result(block.id, f"No such tool: {block.name}")
 
+        async def progress(text: str) -> None:
+            await emit(
+                {"type": "tool", "phase": "progress", "name": block.name, "detail": text}
+            )
+
+        async def artifact(item: dict) -> None:
+            await emit({"type": "artifact", **item})
+
+        tokens = bind_channel(progress, artifact)
         try:
             output = await tool.invoke(args)
         except ToolError as exc:
@@ -223,6 +233,9 @@ class Agent:
             log.exception("tool %s failed", block.name)
             await emit({"type": "tool", "phase": "end", "name": block.name, "detail": "error"})
             return _error_result(block.id, f"{type(exc).__name__}: {exc}")
+
+        finally:
+            release_channel(tokens)
 
         await emit({"type": "tool", "phase": "end", "name": block.name, "detail": "ok"})
         return {"type": "tool_result", "tool_use_id": block.id, "content": output}
@@ -253,6 +266,12 @@ _VERBS = {
     "recall": "Recalling",
     "forget": "Forgetting",
     "send_text": "Texting",
+    "generate_image": "Rendering image",
+    "text_to_3d": "Sculpting",
+    "image_to_3d": "Reconstructing",
+    "check_3d_job": "Checking job",
+    "convert_3d_model": "Converting",
+    "check_3d_credits": "Checking credits",
 }
 
 

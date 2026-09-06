@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-SUITES = ["test_core.py", "test_agent.py", "test_ws.py"]
+SUITES = ["test_core.py", "test_agent.py", "test_ws.py", "test_3d.py"]
 
 
 def main() -> int:

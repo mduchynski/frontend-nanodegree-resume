@@ -60,6 +60,30 @@ def _calendar():
     return [ListEventsTool(), FindFreeTimeTool(), CreateEventTool(), CancelEventTool()]
 
 
+def _images():
+    from .imagegen import GenerateImageTool
+
+    return [GenerateImageTool()]
+
+
+def _threed():
+    from .tripo import (
+        Check3DJobTool,
+        Convert3DModelTool,
+        ImageTo3DTool,
+        TextTo3DTool,
+        TripoBalanceTool,
+    )
+
+    return [
+        TextTo3DTool(),
+        ImageTo3DTool(),
+        Check3DJobTool(),
+        Convert3DModelTool(),
+        TripoBalanceTool(),
+    ]
+
+
 def _messaging():
     from .messaging import SendTextTool
 
@@ -70,6 +94,8 @@ _load("core", _core)
 _load("research", _research)
 _load("gmail", _mail)
 _load("calendar", _calendar)
+_load("images", _images)
+_load("3d", _threed)
 _load("messaging", _messaging)
 
 __all__ = ["registry", "Registry", "Tool", "ToolError"]

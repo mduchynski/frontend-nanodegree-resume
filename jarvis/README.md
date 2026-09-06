@@ -27,6 +27,10 @@ reasoning.
 | Find free time | Working | Skips weekends and existing commitments. |
 | Book meetings, incl. Teams links | Working | Confirmation-gated. |
 | Cancel meetings | Working | Confirmation-gated; attendees notified. |
+| Generate images | Working | FLUX schnell, shown in the HUD. |
+| Text straight to 3D | Working | Tripo3D, one step, no image needed. |
+| Image to 3D | Working | Tripo3D reconstruction from a generated or supplied image. |
+| Convert 3D formats | Working | GLB, FBX, OBJ, STL, USDZ, GLTF, 3MF. |
 | Long-term memory | Working | Survives restarts. |
 | Send texts | **Partial** | See [Texting](#texting) — this is the honest weak spot. |
 
@@ -44,7 +48,9 @@ reasoning.
 | Gmail + Google Calendar API | $0 |
 | Microsoft Graph API | $0 with a work account |
 | Hosting | $0 — runs on your PC |
-| **Claude API** | **the only recurring cost** |
+| **Claude API** | **recurring** — see below |
+| **Image generation** | **~$0.003/image** on fal; free on Together's schnell endpoint |
+| **Tripo3D** | **your existing Tripo credits** — the priciest thing here per action |
 
 At list prices, Haiku 4.5 is $1/$5 per million input/output tokens and Sonnet 5
 is $2/$10. A typical turn with a cached prompt costs a fraction of a cent.
@@ -64,8 +70,19 @@ are the whole design:
    it, instead of quietly running up a bill. Live spend is in the bottom-right
    of the HUD and in `/api/status`.
 
-Realistically, personal use lands around **$3–8/month**. Heavy daily research
-use gets you to $15.
+Realistically, personal use lands around **$3–8/month** for the assistant
+itself. Heavy daily research use gets you to $15.
+
+**3D is the exception, and it is worth being clear about.** Every model burns a
+Tripo credit, and credits cost real money — far more per action than a
+conversation turn. Two things follow, and both are built in: Jarvis is told not
+to speculatively generate variations you did not ask for, and `check_3d_credits`
+lets you ask what is left at any time. If you generate models all day, Tripo
+will be the largest line on your bill by a wide margin, and no amount of
+cleverness on my side changes that.
+
+Going text-to-3D directly instead of image-then-3D saves you the image cost and
+one step, so Jarvis prefers it unless you want to see the look first.
 
 To spend even less, set `JARVIS_DEEP_MODEL=claude-haiku-4-5` so everything runs
 on the cheap model. Quality on multi-step research drops noticeably; routine
@@ -107,7 +124,26 @@ Sign up at <https://brave.com/search/api/> and pick the **Free** plan — 2,000
 queries a month, no card. Put the key in `.env` as `BRAVE_API_KEY`. Results are
 much better than the fallback.
 
-### 4. Gmail (optional, 10 minutes)
+### 4. Images and 3D (optional, 5 minutes)
+
+**Images.** Pick one and put the key in `.env`:
+
+- **fal.ai** (default) — sign up at <https://fal.ai>, create an API key, set
+  `FAL_KEY`. FLUX schnell, about $0.003 an image.
+- **Together AI** — key from <https://api.together.xyz>, set
+  `TOGETHER_API_KEY` and `JARVIS_IMAGE_PROVIDER=together`. They have run a free
+  FLUX schnell endpoint; if `FLUX.1-schnell-Free` stops working, change
+  `TOGETHER_IMAGE_MODEL` to `black-forest-labs/FLUX.1-schnell`.
+
+**3D.** Get an API key from <https://platform.tripo3d.ai> (the API section of
+your account) and set `TRIPO_API_KEY`. It draws on the Tripo credits you
+already have, and everything Jarvis generates lands in your normal Tripo
+workspace, so you can open it in the Tripo web app afterwards.
+
+If your Tripo account is on the China endpoint, set
+`TRIPO_BASE_URL=https://openapi.tripo3d.com/v3`.
+
+### 5. Gmail (optional, 10 minutes)
 
 1. Go to <https://console.cloud.google.com> and create a project.
 2. **APIs & Services → Library**: enable **Gmail API** and **Google Calendar API**.
@@ -127,7 +163,7 @@ A browser opens; approve access. Google will warn that the app is unverified —
 that is expected for a personal app you built yourself. Click through
 **Advanced → Go to (your app)**.
 
-### 5. Teams / Outlook calendar (optional, 10 minutes)
+### 6. Teams / Outlook calendar (optional, 10 minutes)
 
 1. Go to <https://portal.azure.com> → **Microsoft Entra ID** → **App registrations** → **New registration**.
 2. Name it "Jarvis". Under **Supported account types** pick the option that
@@ -151,7 +187,7 @@ It prints a code and a URL. Open the URL, enter the code, sign in.
 > ever see what *you* can see. There is no way around this step; it is your
 > company's calendar.
 
-### 6. Run
+### 7. Run
 
 ```bat
 python run.py
@@ -178,7 +214,35 @@ Jarvis, any unread email from my manager?
 Jarvis, research whether I should replace the water heater or repair it.
 Jarvis, remember that I do deep work before eleven and hate meetings then.
 Jarvis, draft a reply to that last email saying I need another day.
+Jarvis, model me a brass Victorian desk telescope.
+Jarvis, generate an image of a weathered bronze owl statue, then make it 3D.
+Jarvis, give me that last model as an FBX for Unreal.
+Jarvis, is my model done yet?
+Jarvis, how many Tripo credits do I have left?
 ```
+
+### Images and 3D
+
+Ask for an object and Jarvis goes **straight to 3D** — one Tripo call, no image
+in between. Ask to *see* it first and it generates an image, shows it to you,
+and converts that once you are happy.
+
+Images destined for 3D are composed differently on purpose: single centred
+subject, plain grey background, flat even lighting, nothing cropped. That is
+what reconstruction needs, and it is why `generate_image` has a `for_3d` flag
+rather than leaving you to remember it.
+
+![image to 3D](docs/threed.png)
+
+Both appear in the transcript as you go — the image inline, the finished model
+as Tripo's rendered preview with a download link. Click either to view it full
+size. Generations take tens of seconds to a couple of minutes, and the HUD
+shows live progress rather than going silent. If a job outruns the turn, Jarvis
+hands you the job id and you can ask "is it done yet?" later.
+
+Models download as GLB by default. Ask for FBX, OBJ, STL, USDZ, GLTF or 3MF and
+Jarvis converts it. Download links from Tripo expire after about two hours, but
+the model stays in your Tripo workspace.
 
 ### Confirmations
 
@@ -223,7 +287,7 @@ web/hud.js                       core/server.py    FastAPI + WebSocket
   canvas reactor                     core/models.py   fast/deep routing
   transcript      ◄──WebSocket──►    core/memory.py   SQLite
   confirm modal   ◄──approve────►    core/prompt.py   cached system prompt
-                                     tools/          14 tools
+                                     tools/          20 tools
 ```
 
 One WebSocket per browser tab. The agent streams text deltas as they arrive, so
@@ -287,6 +351,14 @@ taking the whole assistant down.
   their availability needs `Calendars.Read.Shared` and a code change.
 - **No background operation.** Jarvis acts when spoken to; it does not watch
   your inbox. A scheduler is the obvious next addition.
+- **3D generation is not instant.** Expect 30 seconds to a few minutes. A turn
+  waits `TRIPO_WAIT_SECONDS` (default 240) and then hands back a job id.
+- **Image-to-3D is only as good as the image.** One clean, centred, unshadowed
+  object works; a busy scene, a cropped subject, or heavy shadows produce bad
+  geometry. `for_3d=true` exists to prevent exactly that, so let Jarvis use it.
+- **Tripo download URLs expire in about two hours.** Jarvis does not mirror the
+  mesh locally — only generated *images* are saved to `data/images`. Grab the
+  file, or re-download it from your Tripo workspace.
 
 ---
 
