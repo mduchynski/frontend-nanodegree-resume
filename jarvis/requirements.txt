@@ -15,3 +15,9 @@ msal>=1.31.0
 
 # --- research ---
 selectolax>=0.3.21
+
+# --- platform ---
+# Windows ships no system timezone database, so Python's zoneinfo has nothing
+# to read and ZoneInfo("America/New_York") raises. Harmless on Linux/macOS,
+# required here.
+tzdata>=2024.2

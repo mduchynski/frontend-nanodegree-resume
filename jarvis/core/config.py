@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -96,3 +97,27 @@ class Config:
 
 
 cfg = Config()
+
+
+def tz() -> ZoneInfo:
+    """The user's timezone, resolved once.
+
+    Windows has no system timezone database -- Python reads the `tzdata`
+    package instead -- so this is the first thing to fail on a fresh Windows
+    install. Say why, rather than surfacing a bare ZoneInfoNotFoundError from
+    inside whichever tool happened to ask for the time.
+    """
+    global _TZ
+    if _TZ is None:
+        try:
+            _TZ = ZoneInfo(cfg.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise RuntimeError(
+                f"Unknown timezone {cfg.timezone!r}. Set JARVIS_TIMEZONE in .env to an "
+                f"IANA name such as America/New_York. If the name looks right, the "
+                f"tzdata package is missing -- run: pip install tzdata"
+            ) from exc
+    return _TZ
+
+
+_TZ: ZoneInfo | None = None

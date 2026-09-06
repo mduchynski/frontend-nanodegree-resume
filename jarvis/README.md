@@ -97,6 +97,12 @@ Requires **Python 3.11+**, **Chrome or Edge**, and a microphone.
 
 ### 1. Install
 
+Requires Python 3.11 or newer. Check with `python --version`; if Windows opens
+the Microsoft Store instead, install Python from
+<https://python.org/downloads> and tick **Add python.exe to PATH**.
+
+In **Command Prompt** (not PowerShell — see the note below):
+
 ```bat
 cd jarvis
 python -m venv .venv
@@ -104,6 +110,15 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 ```
+
+> **PowerShell users:** `.venv\Scripts\Activate.ps1` is often blocked by the
+> default execution policy, with "running scripts is disabled on this system".
+> Either use Command Prompt, or allow it for that one window:
+> `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+
+You will know activation worked because the prompt gains a `(.venv)` prefix.
+Every later command assumes it is active — if you open a new terminal, run
+`.venv\Scripts\activate` again first.
 
 ### 2. Add your Claude API key
 
@@ -197,7 +212,18 @@ It prints a code and a URL. Open the URL, enter the code, sign in.
 python run.py
 ```
 
-Your browser opens on the HUD. Click **WAKE WORD** and allow the microphone.
+Jarvis checks its own configuration first and refuses to start with a plain
+list of what is missing, rather than failing later mid-conversation.
+
+Your browser opens on the HUD. **Open it in Microsoft Edge** — the URL is
+`http://127.0.0.1:8765`. Edge exposes Microsoft's neural voices to the Web
+Speech API; Chrome falls back to markedly worse ones, and Firefox and Safari
+have no speech recognition at all.
+
+Click **WAKE WORD**, allow the microphone when prompted, and say "Jarvis". The
+toggle is remembered, so later launches come back listening.
+
+To stop it, press `Ctrl+C` in the terminal.
 
 ---
 
@@ -367,6 +393,20 @@ taking the whole assistant down.
   is your backstop, which is precisely why it exists.
 
 ---
+
+## If something goes wrong
+
+| Symptom | Cause |
+|---|---|
+| `'python' is not recognized` | Python is not on PATH. Reinstall from python.org with "Add python.exe to PATH" ticked. |
+| "running scripts is disabled on this system" | PowerShell execution policy. See the note in step 1. |
+| `No time zone found with key ...` | The `tzdata` package is missing, or `JARVIS_TIMEZONE` is not a valid IANA name. `pip install tzdata`. |
+| Nothing happens when you speak | You are not in Edge or Chrome, or the mic permission was denied. Check the VOICE lamp in the header. |
+| Voice sounds robotic | You are in Chrome. Use Edge. |
+| He ignores you | Wake word missed. Click the reactor instead, and see "Answering to his name". |
+| `[Errno 10048] address already in use` | Port 8765 is taken, probably by an older Jarvis. Close it, or set `JARVIS_PORT` in `.env`. |
+| Google says the app is unverified | Expected for a personal app. Advanced → Go to (your app). |
+| Azure blocks the app registration | Your employer restricts it. See the note in step 6. |
 
 ## Known limitations
 

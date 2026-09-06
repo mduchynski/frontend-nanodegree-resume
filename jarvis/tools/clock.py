@@ -7,9 +7,7 @@ request and destroys the prompt cache.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-
-from core.config import cfg
+from core.config import tz
 
 from .base import Tool
 
@@ -32,8 +30,7 @@ class ClockTool(Tool):
     }
 
     async def run(self, days_offset: int = 0) -> str:
-        tz = ZoneInfo(cfg.timezone)
-        now = datetime.now(tz) + timedelta(days=days_offset or 0)
+        now = datetime.now(tz()) + timedelta(days=days_offset or 0)
         return (
             f"{now.strftime('%A, %B %d, %Y at %I:%M %p')} {now.tzname()} "
             f"(ISO: {now.isoformat()})"

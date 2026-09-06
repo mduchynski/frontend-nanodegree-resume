@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 import httpx2 as httpx
 
-from core.config import cfg
+from core.config import cfg, tz
 
 from ._microsoft import GRAPH, headers
 from .base import Tool, ToolError
@@ -67,8 +66,7 @@ def _fmt(event: dict) -> str:
 
 
 def _window(days_ahead: int) -> tuple[str, str]:
-    tz = ZoneInfo(cfg.timezone)
-    now = datetime.now(tz)
+    now = datetime.now(tz())
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return start.isoformat(), (start + timedelta(days=days_ahead)).isoformat()
 
@@ -88,7 +86,7 @@ def _parse_local(value: str) -> datetime:
             f"Could not parse start time {value!r}. Use ISO 8601, e.g. 2026-03-14T15:00:00"
         ) from exc
     if dt.tzinfo is not None:
-        dt = dt.astimezone(ZoneInfo(cfg.timezone)).replace(tzinfo=None)
+        dt = dt.astimezone(tz()).replace(tzinfo=None)
     return dt
 
 
@@ -170,20 +168,20 @@ class FindFreeTimeTool(GraphTool):
                 "$select": "subject,start,end,showAs",
             },
         )
-        tz = ZoneInfo(cfg.timezone)
+        zone = tz()
         busy: list[tuple[datetime, datetime]] = []
         for ev in data.get("value", []):
             if ev.get("showAs") in ("free", "workingElsewhere"):
                 continue
             try:
-                s = datetime.fromisoformat(ev["start"]["dateTime"][:19]).replace(tzinfo=tz)
-                e = datetime.fromisoformat(ev["end"]["dateTime"][:19]).replace(tzinfo=tz)
+                s = datetime.fromisoformat(ev["start"]["dateTime"][:19]).replace(tzinfo=zone)
+                e = datetime.fromisoformat(ev["end"]["dateTime"][:19]).replace(tzinfo=zone)
                 busy.append((s, e))
             except (KeyError, ValueError):
                 continue
         busy.sort()
 
-        now = datetime.now(tz)
+        now = datetime.now(zone)
         slots: list[str] = []
         for offset in range(days):
             day = (now + timedelta(days=offset)).replace(
