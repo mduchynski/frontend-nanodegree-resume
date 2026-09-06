@@ -67,7 +67,7 @@ class Config:
     host: str = os.getenv("JARVIS_HOST", "127.0.0.1")
     port: int = int(os.getenv("JARVIS_PORT", "8765"))
 
-    user_name: str = os.getenv("JARVIS_USER_NAME", "Sir")
+    user_name: str = os.getenv("JARVIS_USER_NAME", "Duke")
     timezone: str = os.getenv("JARVIS_TIMEZONE", "America/New_York")
 
     db_path: Path = DATA_DIR / "jarvis.sqlite3"

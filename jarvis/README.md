@@ -20,6 +20,7 @@ reasoning.
 | Capability | Status | Notes |
 |---|---|---|
 | Conversational voice in/out | Working | Chrome or Edge. Wake word "Jarvis", or click the reactor. |
+| Answers to his name | Working | Say "Jarvis" alone and he replies; say it while he is talking and he stops. |
 | Web search + read pages | Working | Brave API free tier, DuckDuckGo fallback. |
 | Read / search Gmail | Working | Full Gmail query syntax. |
 | Draft and send email | Working | Send is confirmation-gated. |
@@ -110,9 +111,12 @@ Get one at <https://console.anthropic.com>. Put it in `.env`:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
-JARVIS_USER_NAME=Michael
+JARVIS_USER_NAME=Duke
 JARVIS_TIMEZONE=America/New_York
 ```
+
+`JARVIS_USER_NAME` is what he calls you, out loud and in the transcript. He is
+told to use it about one turn in three — every turn grates, never is cold.
 
 **At this point it already works** — voice, conversation, memory, and web
 search (on the DuckDuckGo fallback). Run `python run.py` and try it. Everything
@@ -199,11 +203,37 @@ Your browser opens on the HUD. Click **WAKE WORD** and allow the microphone.
 
 ## Using it
 
-- **Say "Jarvis, ..."** — the wake word arms it, then speak your request.
+- **Say "Jarvis, ..."** — then your request, in one breath.
+- **Say just "Jarvis"** — he answers ("Yes, Duke?") and waits. Useful when you
+  know you want him but have not finished thinking. The acknowledgement is
+  spoken locally, so it is instant and costs nothing.
+- **Say "Jarvis" while he is talking** — he stops mid-sentence and listens.
 - **Click the reactor** or **press Space** to talk without the wake word.
 - **Type** in the box at the bottom if you would rather not speak.
 - **STOP** interrupts both the reply and the speech.
 - **VOICE ON/OFF** mutes spoken replies but keeps the transcript.
+
+WAKE WORD is remembered between sessions. Turn it on once and Jarvis comes back
+listening on the next launch, as long as the browser still holds the mic
+permission.
+
+### Answering to his name
+
+Speech recognition mangles "Jarvis" fairly predictably — it is an uncommon
+word, so the recogniser reaches for real ones it knows. `web/wake.js` matches
+the substitutions that actually turn up: *jervis, jarvus, javis, jarvice,
+charvis, harvis, travis*, and a few more.
+
+That list errs towards matching on purpose. A false positive opens a capture
+window that times out after six seconds and costs nothing; a false negative
+means Jarvis ignored you, which is the failure you actually notice. If you know
+a Travis and the trade annoys you, drop it from `VARIANTS` in `web/wake.js` —
+the list is deliberately plain to edit, and `node tests/test_wake.js` checks it.
+
+Barge-in leaves the microphone open while Jarvis speaks, relying on the
+browser's echo cancellation so he does not hear himself. If he ever interrupts
+himself on your hardware, set `BARGE_IN = false` near the top of the Voice
+module in `web/hud.js`.
 
 Things worth trying:
 
@@ -280,14 +310,14 @@ To add your own backend, subclass `Provider` and register it in `_PROVIDERS`.
 ## How it fits together
 
 ```
-Browser (HUD)                    Python backend
-─────────────                    ──────────────
-web/hud.js                       core/server.py    FastAPI + WebSocket
-  Web Speech API  ◄──speech──►     core/agent.py   streaming tool loop
-  canvas reactor                     core/models.py   fast/deep routing
-  transcript      ◄──WebSocket──►    core/memory.py   SQLite
-  confirm modal   ◄──approve────►    core/prompt.py   cached system prompt
-                                     tools/          20 tools
+Browser (HUD)                        Python backend
+─────────────                        ──────────────
+web/wake.js    wake-word matching    core/server.py   FastAPI + WebSocket
+web/hud.js                           core/agent.py    streaming tool loop
+  Web Speech API  ◄── speech ──►     core/models.py   fast/deep routing
+  canvas reactor                     core/memory.py   SQLite
+  transcript      ◄── WebSocket ──►  core/prompt.py   cached system prompt
+  confirm modal   ◄── approve ──►    tools/           20 tools
 ```
 
 One WebSocket per browser tab. The agent streams text deltas as they arrive, so
@@ -341,12 +371,15 @@ taking the whole assistant down.
 ## Known limitations
 
 - **Chrome or Edge only.** Web Speech API is not in Firefox or Safari.
-- **The wake word is client-side and approximate.** It matches "Jarvis" and
-  common mishearings. It will occasionally miss; click the reactor instead.
+- **The wake word is client-side and approximate.** It matches "Jarvis" and the
+  common mishearings listed in `web/wake.js`. It will occasionally miss; click
+  the reactor instead.
 - **Chrome ends recognition sessions every ~60 seconds.** The HUD restarts them
   automatically, but you may see a brief gap.
-- **The mic is muted while Jarvis speaks**, so you cannot interrupt by voice —
-  press STOP or Space.
+- **Interrupting by voice needs working echo cancellation.** The mic stays open
+  while Jarvis speaks so his name can cut him off. On a headset this is
+  reliable; on open laptop speakers at high volume he may occasionally hear
+  himself. STOP and Space always work.
 - **`find_free_time` only knows your calendar**, not your attendees'. Checking
   their availability needs `Calendars.Read.Shared` and a code change.
 - **No background operation.** Jarvis acts when spoken to; it does not watch
@@ -371,4 +404,8 @@ python tests\run_all.py
 No API key and no network needed. They cover the routing heuristics, cost
 maths, conversation-history repair, SQLite persistence, concurrent tool
 execution, the confirmation gate (approve *and* decline paths), error handling,
-and the WebSocket protocol end to end with a stubbed agent.
+and the WebSocket protocol end to end with a stubbed agent. The Tripo3D client
+runs against a local mock speaking the documented v3 envelope. Wake-word
+matching is checked by `tests/test_wake.js` under Node, against the same file
+the browser loads — that suite is skipped if Node is not installed, since
+Jarvis itself does not need it.

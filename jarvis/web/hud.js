@@ -206,34 +206,24 @@ const Voice = (() => {
   let wakeMode = false;     // listening for "jarvis"
   let capturing = false;    // actively collecting a command
   let muted = false;
-  let suspended = false;    // paused because we are speaking
+  let speaking = false;     // Jarvis is talking right now
+  let speechStartedAt = 0;
   let captureTimer = null;
   let voice = null;
+  let userName = 'Duke';
 
-  const handlers = { command: () => {}, interim: () => {}, state: () => {} };
-  const WAKE = /\b(jarvis|jervis|travis|service|charvis)\b/i;
+  const handlers = {
+    command: () => {}, interim: () => {}, state: () => {}, acknowledged: () => {}
+  };
 
-  function pickVoice() {
-    const all = speechSynthesis.getVoices();
-    if (!all.length) return;
-    // Prefer a British male neural voice; Edge on Windows ships several.
-    const wanted = [
-      /Guy.*Online|Ryan.*Online|Thomas.*Online/i,
-      /en-GB.*(Male|Ryan|Thomas|George)/i,
-      /Google UK English Male/i,
-      /Microsoft (Ryan|George|Guy)/i,
-      /en-GB/i
-    ];
-    for (const re of wanted) {
-      const hit = all.find((v) => re.test(v.name) || re.test(v.voiceURI));
-      if (hit) { voice = hit; return; }
-    }
-    voice = all.find((v) => v.lang.startsWith('en')) || all[0];
-  }
-  if (supported) {
-    pickVoice();
-    speechSynthesis.onvoiceschanged = pickVoice;
-  }
+  /* Wake-word matching lives in wake.js so it can be unit-tested. */
+  const { WAKE, strip, nameOnly } = globalThis.JarvisWake;
+
+  /* Barge-in: keep listening while Jarvis speaks so his name interrupts him.
+     Relies on the browser's echo cancellation to avoid hearing himself. If it
+     ever self-triggers on your hardware, set this to false. */
+  const BARGE_IN = true;
+  const SETTLE_MS = 700;  // ignore the first moment of our own speech
 
   function build() {
     const r = new SR();
@@ -245,7 +235,6 @@ const Voice = (() => {
     r.onstart = () => { running = true; };
 
     r.onresult = (event) => {
-      if (suspended) return;
       let interim = '';
       let final = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -257,30 +246,38 @@ const Voice = (() => {
       const live = (final || interim).trim();
       if (!live) return;
 
-      if (!capturing) {
-        // Waiting for the wake word.
-        if (WAKE.test(live)) {
-          capturing = true;
-          handlers.state('listening');
-          const after = live.replace(WAKE, '').replace(/^[,.\s]+/, '');
-          handlers.interim(after || '...');
-          armTimeout();
-        } else {
-          return;
-        }
-      } else {
-        handlers.interim(live.replace(WAKE, '').replace(/^[,.\s]+/, ''));
-        armTimeout();
+      // While Jarvis is talking, the only thing worth hearing is his name.
+      if (speaking) {
+        if (!BARGE_IN) return;
+        if (Date.now() - speechStartedAt < SETTLE_MS) return;
+        if (WAKE.test(live)) bargeIn();
+        return;
       }
 
-      if (final) {
-        const text = final.replace(WAKE, '').replace(/^[,.\s]+/, '').trim();
-        if (text.length > 1) {
-          clearTimeout(captureTimer);
-          capturing = false;
-          handlers.interim('');
-          handlers.command(text);
-        }
+      if (!capturing) {
+        if (!WAKE.test(live)) return;   // still waiting to be addressed
+        capturing = true;
+        handlers.state('listening');
+      }
+
+      handlers.interim(strip(live) || '...');
+      armTimeout();
+
+      if (!final) return;
+
+      // Someone said the name on its own. That is a summons, not a request:
+      // answer it locally and keep the mic open. No API call, no cost.
+      if (nameOnly(final)) {
+        acknowledge();
+        return;
+      }
+
+      const text = strip(final);
+      if (text.length > 1) {
+        clearTimeout(captureTimer);
+        capturing = false;
+        handlers.interim('');
+        handlers.command(text);
       }
     };
 
@@ -294,23 +291,66 @@ const Voice = (() => {
 
     r.onend = () => {
       running = false;
-      // Chrome ends the session every ~60s. Restart if we still want it.
-      if (wakeMode && !suspended) {
-        setTimeout(() => { try { r.start(); } catch (_) {} }, 250);
+      // Chrome ends the session every ~60s, and abort() ends it deliberately.
+      // Either way, come back if we are still meant to be listening.
+      if (wakeMode || capturing) {
+        setTimeout(() => { try { r.start(); } catch (_) {} }, 200);
       }
     };
 
     return r;
   }
 
-  /** If the user trails off, submit what we have rather than hanging. */
-  function armTimeout() {
+  /** If the user trails off, close the capture window rather than hanging. */
+  function armTimeout(ms = 6000) {
     clearTimeout(captureTimer);
     captureTimer = setTimeout(() => {
       capturing = false;
       handlers.interim('');
       handlers.state('idle');
-    }, 6000);
+    }, ms);
+  }
+
+  /* Spoken replies to being called by name. Said locally, so answering to his
+     own name costs nothing and has no round-trip latency. */
+  const ACKS = ['Yes, NAME?', 'NAME.', 'Go ahead.', 'Listening.'];
+  let ackIndex = 0;
+
+  /** They said the name and stopped. Answer, and hold the mic open. */
+  function acknowledge() {
+    clearTimeout(captureTimer);
+    capturing = true;
+    handlers.interim('');
+    handlers.state('listening');
+
+    const line = ACKS[ackIndex++ % ACKS.length].replace('NAME', userName);
+    handlers.acknowledged(line);
+    say(line, () => {
+      // Clear whatever the recogniser buffered while we spoke, then wait
+      // rather more patiently than usual -- they were only getting our
+      // attention, so the actual request is still coming.
+      restart();
+      capturing = true;
+      handlers.state('listening');
+      armTimeout(12000);
+    });
+  }
+
+  /** Heard our name mid-sentence: stop talking and listen. */
+  function bargeIn() {
+    speechSynthesis.cancel();
+    speaking = false;
+    capturing = true;
+    handlers.interim('');
+    handlers.state('listening');
+    restart();
+    armTimeout(9000);
+  }
+
+  /** Drop the current recognition session so its buffer starts clean. */
+  function restart() {
+    if (!recog) return;
+    try { recog.abort(); } catch (_) {}   // onend brings it straight back
   }
 
   function start() {
@@ -338,13 +378,20 @@ const Voice = (() => {
     if (!running) { try { recog.start(); } catch (_) {} }
   }
 
-  /** Speak, with the mic suspended so we do not transcribe ourselves. */
+  /** Speak.
+   *
+   * The mic deliberately stays open so his name can cut him off mid-sentence.
+   * Everything heard while `speaking` is discarded except the wake word, and
+   * the recogniser is reset afterwards, so anything of his own that leaked
+   * through echo cancellation never reaches a request.
+   */
   function say(text, onDone) {
     if (!supported || muted || !text) { onDone && onDone(); return; }
 
     speechSynthesis.cancel();
-    suspended = true;
-    if (running && recog) { try { recog.stop(); } catch (_) {} }
+    speaking = true;
+    speechStartedAt = Date.now();
+    if (wakeMode && !running && recog) { try { recog.start(); } catch (_) {} }
 
     const utter = new SpeechSynthesisUtterance(stripForSpeech(text));
     if (voice) utter.voice = voice;
@@ -352,19 +399,22 @@ const Voice = (() => {
     utter.pitch = 0.92;
     utter.volume = 1;
 
-    const resume = () => {
-      suspended = false;
-      if (wakeMode) setTimeout(() => { if (!running && recog) { try { recog.start(); } catch (_) {} } }, 300);
+    let settled = false;
+    const finish = () => {
+      if (settled) return;   // onend and onerror can both fire
+      settled = true;
+      if (!speaking) return; // barge-in already took over
+      speaking = false;
       onDone && onDone();
     };
-    utter.onend = resume;
-    utter.onerror = resume;
+    utter.onend = finish;
+    utter.onerror = finish;
     speechSynthesis.speak(utter);
   }
 
   function shutUp() {
     speechSynthesis.cancel();
-    suspended = false;
+    speaking = false;
   }
 
   /** Strip anything that sounds wrong when read aloud. */
@@ -379,11 +429,15 @@ const Voice = (() => {
   return {
     supported,
     start, stop, trigger, say, shutUp,
+    // Exposed for tests and for the HUD's own matching.
+    _internals: { WAKE, strip, nameOnly, ACKS },
     on(name, fn) { handlers[name] = fn; },
     get muted() { return muted; },
     set muted(v) { muted = v; if (v) speechSynthesis.cancel(); },
     get wakeMode() { return wakeMode; },
-    get capturing() { return capturing; }
+    get capturing() { return capturing; },
+    get name() { return userName; },
+    set name(v) { if (v) userName = v; }
   };
 })();
 
@@ -399,7 +453,15 @@ const Mic = (() => {
   async function open() {
     if (analyser) return true;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        // Echo cancellation is what stops Jarvis hearing his own voice
+        // through the speakers and interrupting himself.
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
       const audio = new (window.AudioContext || window.webkitAudioContext)();
       const source = audio.createMediaStreamSource(stream);
       analyser = audio.createAnalyser();
@@ -495,6 +557,7 @@ function handle(msg) {
   switch (msg.type) {
     case 'ready':
       UI.greeting.textContent = `online // ${msg.user}`;
+      Voice.name = msg.user;
       break;
 
     case 'status':
@@ -695,6 +758,11 @@ Voice.on('interim', (text) => {
   UI.heard.classList.toggle('live', Boolean(text));
 });
 
+Voice.on('acknowledged', (line) => {
+  bubble('jarvis', 'JARVIS').textContent = line;
+  currentBubble = null;
+});
+
 Voice.on('state', (state) => {
   if (state === 'mic-denied') {
     UI.btnWake.classList.remove('active');
@@ -711,22 +779,40 @@ document.getElementById('reactor').addEventListener('click', async () => {
   Voice.trigger();
 });
 
-UI.btnWake.addEventListener('click', async () => {
-  if (Voice.wakeMode) {
-    Voice.stop();
-    UI.btnWake.classList.remove('active');
-    document.getElementById('cap-voice').classList.remove('on');
-    setState('idle');
-  } else {
-    await Mic.open();
-    if (Voice.start()) {
-      UI.btnWake.classList.add('active');
-      document.getElementById('cap-voice').classList.add('on');
-      setState('idle', 'say "Jarvis"');
-    } else {
-      note('This browser has no Web Speech API. Use Chrome or Edge for voice.', 'error');
-    }
+const WAKE_PREF = 'jarvis.wakeMode';
+
+function remember(key, value) {
+  try { localStorage.setItem(key, value ? '1' : '0'); } catch (_) {}
+}
+
+function recall(key) {
+  try { return localStorage.getItem(key) === '1'; } catch (_) { return false; }
+}
+
+async function enableWake(persist = true) {
+  await Mic.open();
+  if (!Voice.start()) {
+    note('This browser has no Web Speech API. Use Chrome or Edge for voice.', 'error');
+    return false;
   }
+  UI.btnWake.classList.add('active');
+  document.getElementById('cap-voice').classList.add('on');
+  setState('idle', `say "Jarvis"`);
+  if (persist) remember(WAKE_PREF, true);
+  return true;
+}
+
+function disableWake() {
+  Voice.stop();
+  UI.btnWake.classList.remove('active');
+  document.getElementById('cap-voice').classList.remove('on');
+  setState('idle');
+  remember(WAKE_PREF, false);
+}
+
+UI.btnWake.addEventListener('click', () => {
+  if (Voice.wakeMode) disableWake();
+  else enableWake();
 });
 
 UI.btnMute.addEventListener('click', () => {
@@ -786,6 +872,16 @@ fetch('/api/status')
     document.getElementById('cap-3d').classList.toggle('on', s.capabilities.threed);
     UI.spend.textContent = `$${(s.spend.month_usd || 0).toFixed(4)} / mo`;
     UI.greeting.textContent = `online // ${s.user}`;
+    Voice.name = s.user;
+
+    // If wake mode was on last time and the mic is already permitted, come
+    // back up listening. Chrome can refuse without a user gesture; if it
+    // does, the button is still there.
+    if (recall(WAKE_PREF)) {
+      enableWake(false).then((ok) => {
+        if (!ok) note('Click WAKE WORD to start listening again.');
+      }).catch(() => {});
+    }
     if (!s.capabilities.email) note('Gmail is not connected. Run setup_google.py to enable mail.');
     if (!s.capabilities.calendar) note('Calendar is not connected. Run setup_microsoft.py to enable it.');
   })
