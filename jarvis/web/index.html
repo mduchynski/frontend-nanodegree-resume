@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JARVIS</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%234fd6ff' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23bff0ff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/hud.css">
+</head>
+<body data-state="idle">
+  <div id="app">
+    <header>
+      <div class="brand">JARVIS <small id="greeting">standby</small></div>
+      <div class="caps">
+        <div class="cap" id="cap-voice"><span class="dot"></span>VOICE</div>
+        <div class="cap" id="cap-email"><span class="dot"></span>MAIL</div>
+        <div class="cap" id="cap-cal"><span class="dot"></span>CALENDAR</div>
+        <div class="cap" id="cap-search"><span class="dot"></span>SEARCH</div>
+        <div class="cap" id="cap-link"><span class="dot"></span>LINK</div>
+      </div>
+    </header>
+
+    <main id="stage">
+      <canvas id="reactor" width="920" height="920" title="Click to talk"></canvas>
+      <div id="state-label">standby</div>
+      <div id="state-detail"></div>
+      <div id="heard"></div>
+    </main>
+
+    <aside id="panel">
+      <div class="panel-head"><span>TRANSCRIPT</span><span id="tool-count"></span></div>
+      <div id="transcript"></div>
+    </aside>
+
+    <footer>
+      <button class="ctl" id="btn-wake" title="Listen continuously for the wake word">WAKE WORD</button>
+      <button class="ctl" id="btn-mute" title="Mute spoken replies">VOICE ON</button>
+      <input id="compose" placeholder="Type, or say &quot;Jarvis...&quot; / click the reactor to talk" autocomplete="off">
+      <button class="ctl" id="btn-stop" title="Interrupt">STOP</button>
+      <span id="spend">$0.0000</span>
+    </footer>
+  </div>
+
+  <div id="confirm-layer">
+    <div class="confirm-box">
+      <h2>CONFIRMATION REQUIRED</h2>
+      <pre id="confirm-text"></pre>
+      <div class="confirm-actions">
+        <button id="confirm-yes">APPROVE</button>
+        <button id="confirm-no">DECLINE</button>
+      </div>
+      <div class="confirm-hint">say &ldquo;yes&rdquo; or &ldquo;no&rdquo; &middot; enter to approve &middot; esc to decline</div>
+    </div>
+  </div>
+
+  <script src="/static/hud.js"></script>
+</body>
+</html>

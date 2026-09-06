@@ -1,0 +1,17 @@
+# --- core ---
+anthropic>=1.0.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-dotenv>=1.0.1
+httpx2>=0.1.0
+
+# --- Google (Gmail + Google Calendar) ---
+google-auth>=2.35.0
+google-auth-oauthlib>=1.2.1
+google-api-python-client>=2.149.0
+
+# --- Microsoft (Teams / Outlook calendar) ---
+msal>=1.31.0
+
+# --- research ---
+selectolax>=0.3.21
