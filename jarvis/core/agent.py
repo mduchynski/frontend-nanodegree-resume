@@ -92,9 +92,18 @@ class Agent:
             if response.stop_reason != "tool_use":
                 break
 
-            results = await self._run_tools(response, emit, confirm)
-            messages.append({"role": "user", "content": results})
-            store.append_turn(session_id, "user", results)
+            # The assistant turn above is already stored, so its tool_use blocks
+            # MUST get matching tool_result blocks -- even if we are cancelled
+            # mid-confirmation by a STOP or a new message. Leaving them unpaired
+            # poisons the session: every later turn reloads the history and the
+            # API rejects it.
+            results: list[dict] = []
+            try:
+                results = await self._run_tools(response, emit, confirm)
+            finally:
+                results = _pair_every_call(content, results)
+                messages.append({"role": "user", "content": results})
+                store.append_turn(session_id, "user", results)
         else:
             note = "I've hit my limit on steps for this one. Want me to keep going?"
             await emit({"type": "delta", "text": note})
@@ -239,6 +248,26 @@ class Agent:
 
         await emit({"type": "tool", "phase": "end", "name": block.name, "detail": "ok"})
         return {"type": "tool_result", "tool_use_id": block.id, "content": output}
+
+
+def _pair_every_call(assistant_content: list[dict], results: list[dict]) -> list[dict]:
+    """Ensure each tool_use block has a tool_result, in the original order.
+
+    Anything the run did not produce -- because it was interrupted -- gets a
+    synthetic result instead, so the conversation stays valid and the model is
+    told plainly what happened.
+    """
+    produced = {r.get("tool_use_id"): r for r in results if isinstance(r, dict)}
+    paired = []
+    for block in assistant_content:
+        if not isinstance(block, dict) or block.get("type") != "tool_use":
+            continue
+        call_id = block.get("id")
+        paired.append(
+            produced.get(call_id)
+            or _error_result(call_id, "Interrupted before this ran. Do not assume it happened.")
+        )
+    return paired
 
 
 def _error_result(tool_use_id: str, message: str) -> dict:

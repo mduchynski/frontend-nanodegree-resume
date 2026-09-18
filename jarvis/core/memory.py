@@ -158,39 +158,92 @@ class Store:
 
 
 def _repair(msgs: list[dict]) -> list[dict]:
-    """Make a truncated history legal for the Messages API.
+    """Make a stored history legal for the Messages API.
 
-    Trimming to the last N turns can slice between a tool_use and its
-    tool_result, or leave the window starting on an assistant turn. Both are
-    400s. Drop from the front until the history is well-formed.
+    Two things break it. Trimming to the last N turns can slice between a
+    tool_use and its tool_result. And a turn interrupted mid-flight can leave a
+    tool_use that never got an answer -- anywhere in the history, not just at
+    the end. Either is a 400 on every subsequent request, so a poisoned session
+    never recovers on its own.
+
+    An unanswered tool_use is dropped along with any partial results that
+    referred to it. That loses a call from the transcript, which is much better
+    than a conversation that cannot continue.
     """
-    while msgs and msgs[0]["role"] != "user":
-        msgs.pop(0)
+    out: list[dict] = []
+    index = 0
 
-    # A leading user turn made only of tool_result blocks is an orphan: its
-    # matching tool_use was trimmed away.
-    while msgs and _is_only_tool_results(msgs[0]["content"]):
-        msgs.pop(0)
-        while msgs and msgs[0]["role"] != "user":
-            msgs.pop(0)
+    while index < len(msgs):
+        message = msgs[index]
+        calls = _tool_use_ids(message)
 
-    # A trailing assistant turn with unanswered tool_use blocks is also illegal.
-    while msgs and msgs[-1]["role"] == "assistant" and _has_tool_use(msgs[-1]["content"]):
-        msgs.pop()
+        if message.get("role") == "assistant" and calls:
+            nxt = msgs[index + 1] if index + 1 < len(msgs) else None
+            answered = (
+                _tool_result_ids(nxt)
+                if nxt is not None and nxt.get("role") == "user"
+                else set()
+            )
+            if not calls <= answered:
+                index += 1  # drop the unanswered call
+                if nxt is not None and _is_only_tool_results(nxt.get("content")):
+                    index += 1  # and the partial answer that is now orphaned
+                continue
 
-    return msgs
+        if message.get("role") == "user" and _is_only_tool_results(message.get("content")):
+            # Only legal directly after the assistant turn that made the calls.
+            previous = out[-1] if out else None
+            expected = _tool_use_ids(previous) if previous else set()
+            if not expected or not _tool_result_ids(message) <= expected:
+                index += 1
+                continue
+
+        out.append(message)
+        index += 1
+
+    # A conversation has to open on a user turn, and cannot end mid-call.
+    while out and out[0].get("role") != "user":
+        out.pop(0)
+    while out and _is_only_tool_results(out[0].get("content")):
+        out.pop(0)
+        while out and out[0].get("role") != "user":
+            out.pop(0)
+    while out and out[-1].get("role") == "assistant" and _tool_use_ids(out[-1]):
+        out.pop()
+
+    return out
+
+
+def _tool_use_ids(message: Any) -> set:
+    if not isinstance(message, dict):
+        return set()
+    content = message.get("content")
+    if not isinstance(content, list):
+        return set()
+    return {
+        b.get("id")
+        for b in content
+        if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("id")
+    }
+
+
+def _tool_result_ids(message: Any) -> set:
+    if not isinstance(message, dict):
+        return set()
+    content = message.get("content")
+    if not isinstance(content, list):
+        return set()
+    return {
+        b.get("tool_use_id")
+        for b in content
+        if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id")
+    }
 
 
 def _is_only_tool_results(content: Any) -> bool:
     if not isinstance(content, list) or not content:
         return False
     return all(isinstance(b, dict) and b.get("type") == "tool_result" for b in content)
-
-
-def _has_tool_use(content: Any) -> bool:
-    if not isinstance(content, list):
-        return False
-    return any(isinstance(b, dict) and b.get("type") == "tool_use" for b in content)
 
 
 store = Store()

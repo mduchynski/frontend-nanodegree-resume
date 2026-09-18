@@ -103,12 +103,26 @@ class Session:
         if future and not future.done():
             future.set_result(approved)
 
-    def cancel(self) -> None:
-        if self.task and not self.task.done():
-            self.task.cancel()
-        for future in self.pending.values():
+    def decline_pending(self) -> bool:
+        """Answer any open confirmation with 'no'. Returns True if there was one.
+
+        Preferred over cancelling: the turn then finishes normally and writes
+        the tool_result its tool_use needs, instead of leaving the stored
+        conversation unpaired.
+        """
+        answered = False
+        for future in list(self.pending.values()):
             if not future.done():
                 future.set_result(False)
+                answered = True
+        return answered
+
+    def cancel(self) -> None:
+        # Resolve first, so a turn waiting on the user can unwind cleanly
+        # rather than being cancelled between tool_use and tool_result.
+        self.decline_pending()
+        if self.task and not self.task.done():
+            self.task.cancel()
 
 
 @app.websocket("/ws")
@@ -132,6 +146,10 @@ async def websocket(ws: WebSocket) -> None:
                 if not text:
                     continue
                 if session.task and not session.task.done():
+                    # Never cancel a turn that is waiting on a confirmation --
+                    # that strands its tool_use without a tool_result and the
+                    # API rejects the whole conversation from then on.
+                    session.decline_pending()
                     session.task.cancel()
                 session.task = asyncio.create_task(_handle(session, text))
 
@@ -139,8 +157,16 @@ async def websocket(ws: WebSocket) -> None:
                 session.resolve(msg.get("id", ""), bool(msg.get("approved")))
 
             elif kind == "interrupt":
-                session.cancel()
-                await session.emit({"type": "status", "state": "idle", "detail": "stopped"})
+                if session.decline_pending():
+                    # Let the turn finish declining; do not cancel underneath it.
+                    await session.emit(
+                        {"type": "status", "state": "thinking", "detail": "declined"}
+                    )
+                else:
+                    session.cancel()
+                    await session.emit(
+                        {"type": "status", "state": "idle", "detail": "stopped"}
+                    )
 
             elif kind == "reset":
                 store.clear_session(session.id)

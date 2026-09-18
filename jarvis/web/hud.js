@@ -846,17 +846,20 @@ Voice.on('command', (text) => {
   UI.heard.textContent = '';
   UI.heard.classList.remove('live');
 
-  // While a confirmation is up, a spoken yes/no answers it instead of
-  // starting a new turn.
+  // While a confirmation is up, the only thing that matters is yes or no.
+  // Anything else used to start a fresh turn, which cancelled the pending one
+  // mid-flight and left the conversation in a state the API rejects. Now it
+  // re-asks instead.
   if (pendingConfirm) {
-    if (/\b(yes|yeah|yep|confirm|approve|do it|go ahead|send it|please do)\b/i.test(text)) {
+    if (/\b(yes|yeah|yep|yup|confirm|approve|approved|do it|go ahead|send it|send|book it|please do|affirmative)\b/i.test(text)) {
       answerConfirm(true);
-      return;
-    }
-    if (/\b(no|nope|cancel|stop|don'?t|decline|abort|never ?mind)\b/i.test(text)) {
+    } else if (/\b(no|nope|nah|cancel|stop|don'?t|do not|decline|abort|never ?mind|negative|wait)\b/i.test(text)) {
       answerConfirm(false);
-      return;
+    } else {
+      Voice.say(`Yes or no, ${Voice.name}?`);
+      setState('awaiting', 'say yes or no');
     }
+    return;
   }
   send(text);
 });
@@ -931,6 +934,12 @@ UI.btnMute.addEventListener('click', () => {
 
 UI.btnStop.addEventListener('click', () => {
   Voice.shutUp();
+  if (pendingConfirm) {
+    // Decline, so the turn completes cleanly instead of being cancelled
+    // with an unanswered tool call.
+    answerConfirm(false);
+    return;
+  }
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'interrupt' }));
   }
@@ -938,10 +947,14 @@ UI.btnStop.addEventListener('click', () => {
 });
 
 UI.compose.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && UI.compose.value.trim()) {
-    send(UI.compose.value.trim());
-    UI.compose.value = '';
+  if (event.key !== 'Enter' || !UI.compose.value.trim()) return;
+  if (pendingConfirm) {
+    // Enter already approves; don't let a typed message cancel the turn.
+    note('Answer the confirmation first -- approve or decline.');
+    return;
   }
+  send(UI.compose.value.trim());
+  UI.compose.value = '';
 });
 
 /* ---------------------------------------------------------- voice picker */

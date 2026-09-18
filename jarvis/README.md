@@ -505,6 +505,7 @@ taking the whole assistant down.
 | `[Errno 10048] address already in use` | Port 8765 is taken, probably by an older Jarvis. Close it, or set `JARVIS_PORT` in `.env`. |
 | Google says the app is unverified | Expected for a personal app. Advanced → Go to (your app). |
 | Azure blocks the app registration | Very common. Use the local Outlook route in step 6 instead — it needs no approval. |
+| `tool_use ids were found without tool_result blocks` | A turn was interrupted mid-confirmation on an older build. Fixed — pull and restart. Reloading the page always starts a fresh conversation. |
 | `Could not reach Outlook` | Classic Outlook is not running, or you are on "new Outlook", which has no automation support. |
 
 ## Known limitations

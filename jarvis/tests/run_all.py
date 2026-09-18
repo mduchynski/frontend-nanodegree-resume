@@ -9,7 +9,8 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-SUITES = ["test_core.py", "test_agent.py", "test_ws.py", "test_3d.py", "test_outlook.py", "test_outlook_local.py"]
+SUITES = ["test_core.py", "test_agent.py", "test_ws.py", "test_3d.py", "test_outlook.py", "test_outlook_local.py",
+    "test_history.py", "test_confirm_interrupt.py"]
 JS_SUITES = ["test_wake.js"]
 
 
