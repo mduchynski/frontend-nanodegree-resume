@@ -49,31 +49,67 @@ def _mail():
     return [SearchEmailTool(), ReadEmailTool(), DraftEmailTool(), SendEmailTool()]
 
 
-def _outlook():
-    from .outlook import (
-        DraftWorkEmailTool,
-        ReadWorkEmailTool,
-        SearchWorkEmailTool,
-        SendWorkEmailTool,
-    )
+def outlook_backend() -> str:
+    """Which implementation of work mail and calendar to use.
 
+    Both expose the same tool names, so exactly one may register -- otherwise
+    the second silently overwrites the first in the registry.
+    """
+    from core.config import cfg
+
+    from . import outlook_local
+
+    mode = cfg.outlook_mode
+    if mode in ("graph", "local", "off"):
+        return mode
+    if cfg.microsoft_enabled:
+        return "graph"
+    if outlook_local.available():
+        return "local"
+    return "off"
+
+
+def _work():
+    backend = outlook_backend()
+
+    if backend == "graph":
+        from .calendar_tool import (
+            CancelEventTool,
+            CreateEventTool,
+            FindFreeTimeTool,
+            ListEventsTool,
+        )
+        from .outlook import (
+            DraftWorkEmailTool,
+            ReadWorkEmailTool,
+            SearchWorkEmailTool,
+            SendWorkEmailTool,
+        )
+    elif backend == "local":
+        from .outlook_local import (
+            CancelEventTool,
+            CreateEventTool,
+            DraftWorkEmailTool,
+            FindFreeTimeTool,
+            ListEventsTool,
+            ReadWorkEmailTool,
+            SearchWorkEmailTool,
+            SendWorkEmailTool,
+        )
+    else:
+        return []
+
+    log.info("work mail and calendar: %s backend", backend)
     return [
         SearchWorkEmailTool(),
         ReadWorkEmailTool(),
         DraftWorkEmailTool(),
         SendWorkEmailTool(),
+        ListEventsTool(),
+        FindFreeTimeTool(),
+        CreateEventTool(),
+        CancelEventTool(),
     ]
-
-
-def _calendar():
-    from .calendar_tool import (
-        CancelEventTool,
-        CreateEventTool,
-        FindFreeTimeTool,
-        ListEventsTool,
-    )
-
-    return [ListEventsTool(), FindFreeTimeTool(), CreateEventTool(), CancelEventTool()]
 
 
 def _images():
@@ -109,8 +145,7 @@ def _messaging():
 _load("core", _core)
 _load("research", _research)
 _load("gmail", _mail)
-_load("outlook", _outlook)
-_load("calendar", _calendar)
+_load("work mail and calendar", _work)
 _load("images", _images)
 _load("3d", _threed)
 _load("messaging", _messaging)

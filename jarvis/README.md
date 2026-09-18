@@ -23,7 +23,7 @@ reasoning.
 | Answers to his name | Working | Say "Jarvis" alone and he replies; say it while he is talking and he stops. |
 | Web search + read pages | Working | Brave API free tier, DuckDuckGo fallback. |
 | Read / search Gmail | Working | Personal mailbox. Full Gmail query syntax. |
-| Read / search Outlook | Working | Work mailbox, via Microsoft Graph. |
+| Read / search Outlook | Working | Work mailbox, via Graph *or* the desktop app. |
 | Draft and send email | Working | Both mailboxes. Sending is confirmation-gated. |
 | Read Teams/Outlook calendar | Working | Via Microsoft Graph. |
 | Find free time | Working | Skips weekends and existing commitments. |
@@ -191,10 +191,53 @@ A browser opens; approve access. Google will warn that the app is unverified —
 that is expected for a personal app you built yourself. Click through
 **Advanced → Go to (your app)**.
 
-### 6. Outlook email and Teams calendar (optional, 10 minutes)
+### 6. Outlook email and calendar (optional)
 
-One Azure app registration covers both — mail and calendar come through the
-same Microsoft Graph connection and the same sign-in.
+There are two routes. They expose exactly the same tools, so pick whichever
+your employer permits — nothing else in Jarvis changes.
+
+| | **Local** | **Graph** |
+|---|---|---|
+| Needs IT approval | No | Yes — an Azure app registration |
+| Requires | Classic Outlook desktop, installed and running | Nothing running locally |
+| Teams links on invites | No | Yes |
+| Works when Outlook is closed | No | Yes |
+
+**Most locked-down tenants block app registrations**, which makes Local the
+only option. Jarvis picks automatically: Graph if it is configured, otherwise
+the desktop app. Force it with `JARVIS_OUTLOOK_MODE` set to `local`, `graph`
+or `off`.
+
+#### Route A — the local Outlook app (no approval needed)
+
+Nothing new talks to Microsoft. Outlook is already signed in and already
+authorised; Jarvis asks *it* for things over COM, as you, on your machine.
+There is no consent screen because there is nothing to consent to.
+
+```bat
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+That installs `pywin32` (Windows only). Restart, and the banner should read
+`Work mail : Outlook desktop app`.
+
+Two constraints worth knowing:
+
+- **Classic Outlook only.** The "new Outlook" for Windows dropped COM, VBA and
+  MAPI entirely. If there is a **New Outlook** toggle in the top right, switch
+  it off. If it is greyed out, your org has forced new Outlook and this route
+  is closed.
+- **A Teams link cannot be attached automatically.** Invites work; the Teams
+  link has to be added from the invite window yourself. Jarvis will say so
+  rather than pretending otherwise.
+
+Outlook has to be running. If it is not, Jarvis says so instead of failing
+obscurely.
+
+#### Route B — Microsoft Graph (needs an app registration)
+
+One registration covers both mail and calendar.
 
 1. Go to <https://portal.azure.com> → **Microsoft Entra ID** → **App registrations** → **New registration**.
 2. Name it "Jarvis". Under **Supported account types** pick the option that
@@ -460,7 +503,8 @@ taking the whole assistant down.
 | He ignores you | Wake word missed. Click the reactor instead, and see "Answering to his name". |
 | `[Errno 10048] address already in use` | Port 8765 is taken, probably by an older Jarvis. Close it, or set `JARVIS_PORT` in `.env`. |
 | Google says the app is unverified | Expected for a personal app. Advanced → Go to (your app). |
-| Azure blocks the app registration | Your employer restricts it. See the note in step 6. |
+| Azure blocks the app registration | Very common. Use the local Outlook route in step 6 instead — it needs no approval. |
+| `Could not reach Outlook` | Classic Outlook is not running, or you are on "new Outlook", which has no automation support. |
 
 ## Known limitations
 

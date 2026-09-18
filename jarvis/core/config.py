@@ -50,6 +50,13 @@ class Config:
         "TOGETHER_IMAGE_MODEL", "black-forest-labs/FLUX.1-schnell-Free"
     )
 
+    # --- Outlook backend ---
+    # auto  : Graph when it is set up, otherwise the local desktop app
+    # graph : Microsoft Graph only (needs an Azure app registration)
+    # local : drive the classic Outlook desktop app over COM (no Azure)
+    # off   : no work mail or calendar
+    outlook_mode: str = os.getenv("JARVIS_OUTLOOK_MODE", "auto").strip().lower()
+
     # --- Tripo3D ---
     tripo_api_key: str = os.getenv("TRIPO_API_KEY", "")
     tripo_base_url: str = os.getenv(

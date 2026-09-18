@@ -136,7 +136,15 @@ def main() -> None:
     print(f"  Interface : {url}")
     print(f"  Models    : {cfg.fast_model} / {cfg.deep_model}")
     print(f"  Email     : {'connected' if cfg.google_enabled else 'not set up'}")
-    print(f"  Calendar  : {'connected' if cfg.microsoft_enabled else 'not set up'}")
+    from tools import outlook_backend
+
+    work = {
+        "graph": "Microsoft 365 (Graph)",
+        "local": "Outlook desktop app",
+        "off": "not set up",
+    }[outlook_backend()]
+    print(f"  Work mail : {work}")
+    print(f"  Calendar  : {work}")
     print(f"  Search    : {'Brave' if cfg.brave_api_key else 'DuckDuckGo (free fallback)'}")
     print(f"  Images    : {cfg.image_provider if cfg.images_enabled else 'not set up'}")
     print(f"  3D        : {'Tripo3D' if cfg.tripo_enabled else 'not set up'}")

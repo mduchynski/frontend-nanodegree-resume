@@ -21,3 +21,7 @@ selectolax>=0.3.21
 # to read and ZoneInfo("America/New_York") raises. Harmless on Linux/macOS,
 # required here.
 tzdata>=2024.2
+
+# Drives the classic Outlook desktop app over COM, for tenants that block
+# Azure app registrations. Windows only; never installed elsewhere.
+pywin32>=306; sys_platform == "win32"
