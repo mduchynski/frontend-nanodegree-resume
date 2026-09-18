@@ -9,7 +9,6 @@ broken history and was rejected.
 """
 from __future__ import annotations
 
-import asyncio
 import pathlib
 import sys
 import tempfile
