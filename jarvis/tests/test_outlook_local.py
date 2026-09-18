@@ -41,11 +41,18 @@ class FakeItems(list):
 
     def Sort(self, field, descending=False):
         self.sorted_by = (field, descending)
+        # Actually reorder, so an assertion about ordering means something.
+        key = {"[ReceivedTime]": "ReceivedTime", "[Start]": "Start"}.get(field)
+        if key:
+            self.sort(key=lambda item: str(getattr(item, key, "")), reverse=bool(descending))
 
     def Restrict(self, restriction):
         self.restriction = restriction
         CALLS["restrict"] = restriction
-        out = FakeItems(list(self))
+        # Real Outlook returns a NEW collection in storage order -- it does not
+        # carry the caller's sort. Reversing here makes any code that sorts
+        # before restricting fail loudly instead of passing by luck.
+        out = FakeItems(list(reversed(self)))
         out.IncludeRecurrences = self.IncludeRecurrences
         return out
 
@@ -250,6 +257,22 @@ async def tool_checks():
 
     out = await ol.SearchWorkEmailTool().run(max_results=1)
     check(out.count("[id:") == 1, "max_results honoured")
+
+    print("\n=== newest first, even when a filter is applied ===")
+    # The bug: Sort() before Restrict() silently yielded oldest-first, which
+    # looked like Jarvis not seeing new mail.
+    dated = [FakeMail(id=f"E{i}", subject=f"msg{i}", received=f"2026-09-{10+i:02d} 09:00:00")
+             for i in range(6)]
+    APP.ns.mail = dated
+    out = await ol.SearchWorkEmailTool().run(unread_only=True, max_results=3)
+    when = [line.split("When:")[1].strip() for line in out.splitlines() if "When:" in line]
+    check(when == sorted(when, reverse=True), f"filtered results are newest-first: {when}")
+    check(when and when[0].startswith("2026-09-15"), "the newest message is included")
+
+    out = await ol.SearchWorkEmailTool().run(max_results=3)
+    when = [line.split("When:")[1].strip() for line in out.splitlines() if "When:" in line]
+    check(when == sorted(when, reverse=True), "unfiltered results are newest-first too")
+    APP.ns.mail = MAIL
 
     print("\n=== non-mail items in the inbox are skipped ===")
     receipt = FakeMail(id="R1")

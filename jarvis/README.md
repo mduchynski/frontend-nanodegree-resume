@@ -235,6 +235,14 @@ Two constraints worth knowing:
 Outlook has to be running. If it is not, Jarvis says so instead of failing
 obscurely.
 
+If mail results ever look wrong, `python check_outlook.py` prints the
+mailboxes in your profile, the inbox Jarvis reads, what Outlook considers the
+newest messages, and what Jarvis's own query returns — so a disagreement
+between the last two is obvious rather than guesswork.
+
+Jarvis reads the **Inbox only**. A rule that files incoming mail into a
+subfolder hides it; `check_outlook.py` lists the subfolders it can see.
+
 #### Route B — Microsoft Graph (needs an app registration)
 
 One registration covers both mail and calendar.
@@ -506,6 +514,8 @@ taking the whole assistant down.
 | Google says the app is unverified | Expected for a personal app. Advanced → Go to (your app). |
 | Azure blocks the app registration | Very common. Use the local Outlook route in step 6 instead — it needs no approval. |
 | `tool_use ids were found without tool_result blocks` | A turn was interrupted mid-confirmation on an older build. Fixed — pull and restart. Reloading the page always starts a fresh conversation. |
+| Jarvis misses new mail | Run `python check_outlook.py`. It shows which mailbox is being read, what Outlook reports as newest, and what Jarvis's own query returns. If they disagree, paste the output. |
+| Jarvis reads the wrong mailbox | Your work account is not the profile default. `check_outlook.py` lists the mailboxes; put one in `OUTLOOK_ACCOUNT`. |
 | `Could not reach Outlook` | Classic Outlook is not running, or you are on "new Outlook", which has no automation support. |
 
 ## Known limitations

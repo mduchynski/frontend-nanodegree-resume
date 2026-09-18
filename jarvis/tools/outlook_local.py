@@ -176,6 +176,35 @@ def free_slots(
 # COM plumbing
 # --------------------------------------------------------------------------
 
+def inbox(namespace):
+    """The inbox to read.
+
+    GetDefaultFolder() returns the *default* store's inbox, which is the wrong
+    mailbox when work mail is a secondary account in the profile. Set
+    OUTLOOK_ACCOUNT in .env to a store display name or address to pick another.
+    """
+    import os
+
+    wanted = os.getenv("OUTLOOK_ACCOUNT", "").strip()
+    if not wanted:
+        return namespace.GetDefaultFolder(FOLDER_INBOX)
+
+    names = []
+    for store in namespace.Stores:
+        try:
+            name = str(store.DisplayName)
+        except Exception:  # noqa: BLE001
+            continue
+        names.append(name)
+        if wanted.lower() in name.lower():
+            return store.GetDefaultFolder(FOLDER_INBOX)
+
+    raise ToolError(
+        f"No Outlook account matching OUTLOOK_ACCOUNT={wanted!r}. "
+        f"Available: {', '.join(names) or 'none'}."
+    )
+
+
 def _outlook():
     """A live Outlook.Application. Replaced wholesale in tests."""
     import win32com.client
@@ -256,10 +285,14 @@ class SearchWorkEmailTool(LocalOutlookTool):
     @staticmethod
     def _search(restriction: str, top: int) -> list[dict]:
         namespace = _outlook().GetNamespace("MAPI")
-        items = namespace.GetDefaultFolder(FOLDER_INBOX).Items
-        items.Sort("[ReceivedTime]", True)
+        items = inbox(namespace).Items
+        # Restrict FIRST, then Sort. Restrict returns a new collection and does
+        # not carry the original's order, so sorting beforehand silently gives
+        # you arbitrary -- usually oldest-first -- results, which looks exactly
+        # like Jarvis not seeing new mail.
         if restriction:
             items = items.Restrict(restriction)
+        items.Sort("[ReceivedTime]", True)
 
         out: list[dict] = []
         for item in items:
