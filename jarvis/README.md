@@ -251,7 +251,24 @@ To stop it, press `Ctrl+C` in the terminal.
 - **Click the reactor** or **press Space** to talk without the wake word.
 - **Type** in the box at the bottom if you would rather not speak.
 - **STOP** interrupts both the reply and the speech.
-- **VOICE ON/OFF** mutes spoken replies but keeps the transcript.
+- **SPEAK ON/OFF** mutes spoken replies but keeps the transcript.
+- **VOICE…** opens the voice picker.
+
+### Choosing a voice
+
+**VOICE…** in the footer lists every English voice your browser offers. Click
+one to hear it, drag rate and pitch to taste, and the choice is remembered.
+**RESET** goes back to automatic selection and the default tuning.
+
+Voices marked NEURAL are the good ones. In Edge these are Microsoft's
+"Online (Natural)" voices; **Ryan** and **Thomas** are the British male ones
+worth trying first. Left alone, Jarvis picks the best British male voice
+available, falling back through Chrome's `Google UK English Male` and then
+whatever English voice exists.
+
+Rate and pitch default to 1.06 and 0.92 — slightly quick and slightly low,
+which reads as efficient and authoritative rather than plodding. They are the
+fastest way to change how he comes across without changing voice.
 
 WAKE WORD is remembered between sessions. Turn it on once and Jarvis comes back
 listening on the next launch, as long as the browser still holds the mic
@@ -417,7 +434,8 @@ taking the whole assistant down.
 | "running scripts is disabled on this system" | PowerShell execution policy. See the note in step 1. |
 | `No time zone found with key ...` | The `tzdata` package is missing, or `JARVIS_TIMEZONE` is not a valid IANA name. `pip install tzdata`. |
 | Nothing happens when you speak | You are not in Edge or Chrome, or the mic permission was denied. Check the VOICE lamp in the header. |
-| Voice sounds robotic | You are in Chrome. Use Edge. |
+| Voice sounds robotic | You are in Chrome. Use Edge, then pick a NEURAL voice under VOICE&hellip;. |
+| Wrong accent | Open VOICE&hellip; and pick Ryan or Thomas. |
 | He ignores you | Wake word missed. Click the reactor instead, and see "Answering to his name". |
 | `[Errno 10048] address already in use` | Port 8765 is taken, probably by an older Jarvis. Close it, or set `JARVIS_PORT` in `.env`. |
 | Google says the app is unverified | Expected for a personal app. Advanced → Go to (your app). |

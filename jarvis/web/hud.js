@@ -225,6 +225,89 @@ const Voice = (() => {
   const BARGE_IN = true;
   const SETTLE_MS = 700;  // ignore the first moment of our own speech
 
+  /* ---------------------------------------------------------------- voice */
+
+  let rate = 1.06;    // a touch quick reads as efficient rather than plodding
+  let pitch = 0.92;   // a touch low reads as authoritative
+  const PREF = { voice: 'jarvis.voiceURI', rate: 'jarvis.rate', pitch: 'jarvis.pitch' };
+
+  function readPref(key) {
+    try { return localStorage.getItem(key); } catch (_) { return null; }
+  }
+
+  function writePref(key, value) {
+    try { localStorage.setItem(key, String(value)); } catch (_) {}
+  }
+
+  /* Preference order for picking a voice automatically.
+     These are separate tiers deliberately. Collapsing them into one regex
+     lets whichever voice the browser happens to list first win, which is
+     usually the American one -- the bug this replaces. */
+  const PREFERRED = [
+    /(Ryan|Thomas).*Online/i,                       // en-GB neural, Edge
+    /Google UK English Male/i,                      // Chrome
+    /Microsoft (Ryan|Thomas|George)\b/i,            // en-GB, older
+    /en-GB.*Online/i,                               // any en-GB neural
+    /(Guy|Christopher|Brian|Andrew).*Online/i,      // en-US neural male
+    /en-GB/i,
+    /Online.*Natural/i,
+    /^en/i
+  ];
+
+  function englishVoices() {
+    if (!supported) return [];
+    return speechSynthesis.getVoices()
+      .filter((v) => v.lang && v.lang.toLowerCase().startsWith('en'));
+  }
+
+  function autoVoice() {
+    const all = englishVoices();
+    if (!all.length) return null;
+    for (const re of PREFERRED) {
+      const hit = all.find((v) => re.test(v.name) || re.test(v.voiceURI));
+      if (hit) return hit;
+    }
+    return all[0];
+  }
+
+  /* The browser populates the voice list asynchronously, so this runs again
+     on voiceschanged rather than only at startup. */
+  function applyVoice() {
+    const all = englishVoices();
+    if (!all.length) return;
+    const saved = readPref(PREF.voice);
+    if (saved) {
+      const hit = all.find((v) => v.voiceURI === saved || v.name === saved);
+      if (hit) { voice = hit; return; }
+    }
+    voice = autoVoice();
+  }
+
+  function loadPrefs() {
+    const r = parseFloat(readPref(PREF.rate));
+    if (Number.isFinite(r)) rate = r;
+    const p = parseFloat(readPref(PREF.pitch));
+    if (Number.isFinite(p)) pitch = p;
+  }
+
+  /** Speak a sample. Deliberately bypasses mute and the barge-in state
+   *  machine -- auditioning a voice should work regardless. */
+  function preview(text) {
+    if (!supported) return;
+    speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    if (voice) utter.voice = voice;
+    utter.rate = rate;
+    utter.pitch = pitch;
+    speechSynthesis.speak(utter);
+  }
+
+  if (supported) {
+    loadPrefs();
+    applyVoice();
+    speechSynthesis.onvoiceschanged = applyVoice;
+  }
+
   function build() {
     const r = new SR();
     r.continuous = true;
@@ -395,8 +478,8 @@ const Voice = (() => {
 
     const utter = new SpeechSynthesisUtterance(stripForSpeech(text));
     if (voice) utter.voice = voice;
-    utter.rate = 1.06;
-    utter.pitch = 0.92;
+    utter.rate = rate;
+    utter.pitch = pitch;
     utter.volume = 1;
 
     let settled = false;
@@ -431,6 +514,30 @@ const Voice = (() => {
     start, stop, trigger, say, shutUp,
     // Exposed for tests and for the HUD's own matching.
     _internals: { WAKE, strip, nameOnly, ACKS },
+
+    // --- voice selection, driven by the picker panel ---
+    listVoices: englishVoices,
+    preview,
+    get voice() { return voice; },
+    setVoice(uri) {
+      const hit = englishVoices().find((v) => v.voiceURI === uri);
+      if (!hit) return false;
+      voice = hit;
+      writePref(PREF.voice, uri);
+      return true;
+    },
+    resetVoice() {
+      try { localStorage.removeItem(PREF.voice); } catch (_) {}
+      voice = autoVoice();
+      rate = 1.06;
+      pitch = 0.92;
+      writePref(PREF.rate, rate);
+      writePref(PREF.pitch, pitch);
+    },
+    get rate() { return rate; },
+    set rate(v) { rate = v; writePref(PREF.rate, v); },
+    get pitch() { return pitch; },
+    set pitch(v) { pitch = v; writePref(PREF.pitch, v); },
     on(name, fn) { handlers[name] = fn; },
     get muted() { return muted; },
     set muted(v) { muted = v; if (v) speechSynthesis.cancel(); },
@@ -502,6 +609,7 @@ const UI = {
   confirmText: document.getElementById('confirm-text'),
   btnWake: document.getElementById('btn-wake'),
   btnMute: document.getElementById('btn-mute'),
+  btnVoice: document.getElementById('btn-voice'),
   btnStop: document.getElementById('btn-stop')
 };
 
@@ -817,7 +925,7 @@ UI.btnWake.addEventListener('click', () => {
 
 UI.btnMute.addEventListener('click', () => {
   Voice.muted = !Voice.muted;
-  UI.btnMute.textContent = Voice.muted ? 'VOICE OFF' : 'VOICE ON';
+  UI.btnMute.textContent = Voice.muted ? 'SPEAK OFF' : 'SPEAK ON';
   UI.btnMute.classList.toggle('active', !Voice.muted);
 });
 
@@ -836,6 +944,114 @@ UI.compose.addEventListener('keydown', (event) => {
   }
 });
 
+/* ---------------------------------------------------------- voice picker */
+
+const SAMPLE = "Three things, Duke. Design review at two, and the vendor call at five.";
+
+function renderVoices() {
+  const list = document.getElementById('voice-list');
+  const voices = Voice.listVoices();
+  list.innerHTML = '';
+
+  if (!voices.length) {
+    // Chrome and Edge populate this asynchronously; onvoiceschanged re-runs us.
+    list.innerHTML = '<div class="voice-row">Loading voices&hellip;</div>';
+    return;
+  }
+
+  const current = Voice.voice;
+  for (const v of voices) {
+    const row = document.createElement('div');
+    row.className = 'voice-row' + (current && v.voiceURI === current.voiceURI ? ' selected' : '');
+
+    const tick = document.createElement('span');
+    tick.className = 'tick';
+    tick.textContent = current && v.voiceURI === current.voiceURI ? '>' : '';
+    row.appendChild(tick);
+
+    const name = document.createElement('span');
+    name.className = 'vname';
+    // Strip the boilerplate Microsoft wraps around every neural voice name.
+    name.textContent = v.name.replace(/^Microsoft\s+/, '').replace(/\s*-\s*English.*$/, '');
+    name.title = v.name;
+    row.appendChild(name);
+
+    if (/Online|Natural|Google/i.test(v.name)) {
+      const tag = document.createElement('span');
+      tag.className = 'tag neural';
+      tag.textContent = 'NEURAL';
+      row.appendChild(tag);
+    }
+
+    const lang = document.createElement('span');
+    lang.className = 'lang';
+    lang.textContent = v.lang;
+    row.appendChild(lang);
+
+    row.addEventListener('click', () => {
+      Voice.setVoice(v.voiceURI);
+      renderVoices();
+      Voice.preview(SAMPLE);
+    });
+
+    list.appendChild(row);
+  }
+}
+
+function syncTuners() {
+  const r = document.getElementById('v-rate');
+  const p = document.getElementById('v-pitch');
+  r.value = Voice.rate;
+  p.value = Voice.pitch;
+  document.getElementById('v-rate-val').textContent = Number(Voice.rate).toFixed(2);
+  document.getElementById('v-pitch-val').textContent = Number(Voice.pitch).toFixed(2);
+}
+
+function openVoicePicker() {
+  renderVoices();
+  syncTuners();
+  document.getElementById('voice-layer').classList.add('show');
+}
+
+function closeVoicePicker() {
+  document.getElementById('voice-layer').classList.remove('show');
+}
+
+UI.btnVoice.addEventListener('click', openVoicePicker);
+document.getElementById('voice-done').addEventListener('click', closeVoicePicker);
+document.getElementById('voice-sample').addEventListener('click', () => Voice.preview(SAMPLE));
+document.getElementById('voice-auto').addEventListener('click', () => {
+  Voice.resetVoice();
+  renderVoices();
+  syncTuners();
+  Voice.preview(SAMPLE);
+});
+
+document.getElementById('v-rate').addEventListener('input', (e) => {
+  Voice.rate = parseFloat(e.target.value);
+  document.getElementById('v-rate-val').textContent = Voice.rate.toFixed(2);
+});
+document.getElementById('v-pitch').addEventListener('input', (e) => {
+  Voice.pitch = parseFloat(e.target.value);
+  document.getElementById('v-pitch-val').textContent = Voice.pitch.toFixed(2);
+});
+// Audition only when the slider is released, not on every pixel of drag.
+for (const id of ['v-rate', 'v-pitch']) {
+  document.getElementById(id).addEventListener('change', () => Voice.preview(SAMPLE));
+}
+
+// Clicking the backdrop dismisses.
+document.getElementById('voice-layer').addEventListener('click', (e) => {
+  if (e.target.id === 'voice-layer') closeVoicePicker();
+});
+
+// The list arrives asynchronously; refresh the panel if it is open.
+if ('speechSynthesis' in window) {
+  speechSynthesis.addEventListener('voiceschanged', () => {
+    if (document.getElementById('voice-layer').classList.contains('show')) renderVoices();
+  });
+}
+
 document.getElementById('viewer').addEventListener('click', () => {
   document.getElementById('viewer').classList.remove('show');
 });
@@ -847,6 +1063,11 @@ document.addEventListener('keydown', (event) => {
   const viewer = document.getElementById('viewer');
   if (event.key === 'Escape' && viewer.classList.contains('show')) {
     viewer.classList.remove('show');
+    return;
+  }
+  const voicePanel = document.getElementById('voice-layer');
+  if (voicePanel.classList.contains('show')) {
+    if (event.key === 'Escape' || event.key === 'Enter') closeVoicePicker();
     return;
   }
   if (pendingConfirm) {

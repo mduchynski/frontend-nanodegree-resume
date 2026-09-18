@@ -36,7 +36,8 @@
 
     <footer>
       <button class="ctl" id="btn-wake" title="Listen continuously for the wake word">WAKE WORD</button>
-      <button class="ctl" id="btn-mute" title="Mute spoken replies">VOICE ON</button>
+      <button class="ctl" id="btn-mute" title="Mute spoken replies">SPEAK ON</button>
+      <button class="ctl" id="btn-voice" title="Choose which voice Jarvis uses">VOICE&hellip;</button>
       <input id="compose" placeholder="Type, or say &quot;Jarvis...&quot; / click the reactor to talk" autocomplete="off">
       <button class="ctl" id="btn-stop" title="Interrupt">STOP</button>
       <span id="spend">$0.0000</span>
@@ -44,6 +45,23 @@
   </div>
 
   <div id="viewer"><img alt="" id="viewer-img"></div>
+
+  <div id="voice-layer">
+    <div class="voice-box">
+      <h2>VOICE</h2>
+      <div id="voice-list"></div>
+      <div class="voice-tune">
+        <label>RATE<input type="range" id="v-rate" min="0.7" max="1.4" step="0.02"><span id="v-rate-val"></span></label>
+        <label>PITCH<input type="range" id="v-pitch" min="0.6" max="1.3" step="0.02"><span id="v-pitch-val"></span></label>
+      </div>
+      <div class="voice-actions">
+        <button id="voice-sample">SAMPLE</button>
+        <button id="voice-auto">RESET</button>
+        <button id="voice-done">DONE</button>
+      </div>
+      <div class="confirm-hint">click a voice to hear it &middot; your choice is remembered</div>
+    </div>
+  </div>
 
   <div id="confirm-layer">
     <div class="confirm-box">
