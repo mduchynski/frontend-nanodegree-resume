@@ -47,7 +47,8 @@ class GoogleTool(Tool):
 class SearchEmailTool(GoogleTool):
     name = "search_email"
     description = """
-    Search the user's Gmail. Accepts full Gmail query syntax, e.g.
+    Search the user's PERSONAL Gmail mailbox. For work mail use
+    `search_work_email` instead. Accepts full Gmail query syntax, e.g.
     'is:unread', 'from:boss@corp.com', 'subject:invoice newer_than:7d',
     'has:attachment'. Returns a compact list -- use `read_email` with a message
     id to get the full body.
@@ -101,7 +102,7 @@ class SearchEmailTool(GoogleTool):
 
 class ReadEmailTool(GoogleTool):
     name = "read_email"
-    description = "Read one email in full by its message id (from `search_email`)."
+    description = "Read one personal Gmail message in full by its id (from `search_email`)."
     schema = {
         "type": "object",
         "properties": {"message_id": {"type": "string"}},
@@ -135,7 +136,8 @@ class ReadEmailTool(GoogleTool):
 class SendEmailTool(GoogleTool):
     name = "send_email"
     description = """
-    Send an email from the user's Gmail account. The user is always asked to
+    Send an email from the user's PERSONAL Gmail account. For work mail use
+    `send_work_email` instead. The user is always asked to
     confirm before this actually sends. Write the body in the user's voice:
     plain, direct, no filler. If you are unsure of the recipient's address,
     search their mail for it first rather than guessing.
@@ -217,7 +219,7 @@ class SendEmailTool(GoogleTool):
 class DraftEmailTool(GoogleTool):
     name = "draft_email"
     description = """
-    Save an email as a Gmail draft without sending it. Prefer this over
+    Save a personal Gmail draft without sending it. Prefer this over
     `send_email` when the user says 'draft', 'write up', or seems to want to
     review before it goes out.
     """

@@ -49,6 +49,22 @@ def _mail():
     return [SearchEmailTool(), ReadEmailTool(), DraftEmailTool(), SendEmailTool()]
 
 
+def _outlook():
+    from .outlook import (
+        DraftWorkEmailTool,
+        ReadWorkEmailTool,
+        SearchWorkEmailTool,
+        SendWorkEmailTool,
+    )
+
+    return [
+        SearchWorkEmailTool(),
+        ReadWorkEmailTool(),
+        DraftWorkEmailTool(),
+        SendWorkEmailTool(),
+    ]
+
+
 def _calendar():
     from .calendar_tool import (
         CancelEventTool,
@@ -93,6 +109,7 @@ def _messaging():
 _load("core", _core)
 _load("research", _research)
 _load("gmail", _mail)
+_load("outlook", _outlook)
 _load("calendar", _calendar)
 _load("images", _images)
 _load("3d", _threed)

@@ -22,8 +22,9 @@ reasoning.
 | Conversational voice in/out | Working | Chrome or Edge. Wake word "Jarvis", or click the reactor. |
 | Answers to his name | Working | Say "Jarvis" alone and he replies; say it while he is talking and he stops. |
 | Web search + read pages | Working | Brave API free tier, DuckDuckGo fallback. |
-| Read / search Gmail | Working | Full Gmail query syntax. |
-| Draft and send email | Working | Send is confirmation-gated. |
+| Read / search Gmail | Working | Personal mailbox. Full Gmail query syntax. |
+| Read / search Outlook | Working | Work mailbox, via Microsoft Graph. |
+| Draft and send email | Working | Both mailboxes. Sending is confirmation-gated. |
 | Read Teams/Outlook calendar | Working | Via Microsoft Graph. |
 | Find free time | Working | Skips weekends and existing commitments. |
 | Book meetings, incl. Teams links | Working | Confirmation-gated. |
@@ -190,7 +191,10 @@ A browser opens; approve access. Google will warn that the app is unverified —
 that is expected for a personal app you built yourself. Click through
 **Advanced → Go to (your app)**.
 
-### 6. Teams / Outlook calendar (optional, 10 minutes)
+### 6. Outlook email and Teams calendar (optional, 10 minutes)
+
+One Azure app registration covers both — mail and calendar come through the
+same Microsoft Graph connection and the same sign-in.
 
 1. Go to <https://portal.azure.com> → **Microsoft Entra ID** → **App registrations** → **New registration**.
 2. Name it "Jarvis". Under **Supported account types** pick the option that
@@ -208,11 +212,18 @@ python setup_microsoft.py
 
 It prints a code and a URL. Open the URL, enter the code, sign in.
 
+Jarvis requests five delegated scopes: `User.Read`, `Calendars.ReadWrite`,
+`OnlineMeetings.ReadWrite`, `Mail.ReadWrite` and `Mail.Send`. Delegated means
+it can only ever see and do what **you** can — it is your account acting, not a
+service account with standing access to the tenant.
+
 > **If your employer blocks app registrations** — many do — ask IT to register
-> it, or to grant consent for the delegated scopes `Calendars.ReadWrite` and
-> `OnlineMeetings.ReadWrite`. These are delegated permissions: Jarvis can only
-> ever see what *you* can see. There is no way around this step; it is your
-> company's calendar.
+> it, or to consent to those five scopes. There is no way around this step; it
+> is your company's mailbox and calendar.
+
+> **If you change the scopes later**, re-run `setup_microsoft.py`. MSAL caches
+> tokens against the exact scope set it was granted, so a new permission does
+> not take effect until you sign in again.
 
 ### 7. Run
 
@@ -297,7 +308,9 @@ Things worth trying:
 ```
 Jarvis, what does my afternoon look like?
 Jarvis, find me thirty minutes with Dana this week and book it.
-Jarvis, any unread email from my manager?
+Jarvis, any unread work email?
+Jarvis, what did Dana send about the Q3 numbers?
+Jarvis, reply to that and say Thursday works.
 Jarvis, research whether I should replace the water heater or repair it.
 Jarvis, remember that I do deep work before eleven and hate meetings then.
 Jarvis, draft a reply to that last email saying I need another day.
@@ -344,6 +357,14 @@ it. If you add tools of your own, set `confirm = True` on anything with
 outside-world consequences.
 
 ---
+
+### Two mailboxes
+
+Gmail and Outlook can both be connected, and they stay separate: Gmail is the
+personal mailbox (`search_email`, `send_email`), Outlook is the work one
+(`search_work_email`, `send_work_email`). The tool descriptions say which is
+which, so "any unread work email?" and "check my personal mail" go to the right
+place. Connect either, both, or neither.
 
 ## Texting
 

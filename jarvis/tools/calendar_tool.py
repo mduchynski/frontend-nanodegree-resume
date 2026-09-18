@@ -3,44 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-import httpx2 as httpx
-
 from core.config import cfg, tz
 
-from ._microsoft import GRAPH, headers
-from .base import Tool, ToolError
-
-_TIMEOUT = httpx.Timeout(25.0, connect=8.0)
-
-
-class GraphTool(Tool):
-    def available(self) -> bool:
-        return cfg.microsoft_enabled
-
-    async def _get(self, path: str, params: dict | None = None) -> dict:
-        return await self._call("GET", path, params=params)
-
-    async def _post(self, path: str, body: dict) -> dict:
-        return await self._call("POST", path, json=body)
-
-    async def _call(self, method: str, path: str, **kw) -> dict:
-        hdrs = headers()
-        # Ask Graph to return times already converted to the user's timezone.
-        hdrs["Prefer"] = f'outlook.timezone="{cfg.timezone}"'
-        try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.request(method, f"{GRAPH}{path}", headers=hdrs, **kw)
-        except httpx.HTTPError as exc:
-            raise ToolError(f"Could not reach Microsoft Graph: {exc}") from exc
-
-        if resp.status_code >= 400:
-            detail = ""
-            try:
-                detail = resp.json().get("error", {}).get("message", "")
-            except Exception:
-                detail = resp.text[:300]
-            raise ToolError(f"Graph {resp.status_code}: {detail}")
-        return resp.json() if resp.content else {}
+from ._microsoft import GraphTool
+from .base import ToolError
 
 
 def _fmt(event: dict) -> str:

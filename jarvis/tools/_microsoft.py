@@ -1,9 +1,12 @@
-"""Microsoft Graph auth (MSAL device-code flow with a cached refresh token)."""
+"""Microsoft Graph: auth (MSAL device-code flow) and the shared tool base."""
 from __future__ import annotations
 
+import httpx2 as httpx
 import msal
 
 from core.config import cfg
+
+from .base import Tool, ToolError
 
 # Delegated scopes. Keep this list minimal and identical between setup and
 # runtime -- MSAL keys its cache by scope set.
@@ -11,6 +14,8 @@ SCOPES = [
     "User.Read",
     "Calendars.ReadWrite",
     "OnlineMeetings.ReadWrite",
+    "Mail.ReadWrite",   # read the mailbox and save drafts
+    "Mail.Send",        # send; deliberately separate from ReadWrite
 ]
 
 GRAPH = "https://graph.microsoft.com/v1.0"
@@ -61,3 +66,43 @@ def headers() -> dict[str, str]:
         "Authorization": f"Bearer {access_token()}",
         "Content-Type": "application/json",
     }
+
+
+_TIMEOUT = httpx.Timeout(30.0, connect=8.0)
+
+
+class GraphTool(Tool):
+    """Base for every tool that talks to Microsoft Graph."""
+
+    def available(self) -> bool:
+        return cfg.microsoft_enabled
+
+    async def _get(self, path: str, params: dict | None = None) -> dict:
+        return await self._call("GET", path, params=params)
+
+    async def _post(self, path: str, body: dict | None = None) -> dict:
+        return await self._call("POST", path, json=body or {})
+
+    async def _call(self, method: str, path: str, **kw) -> dict:
+        hdrs = headers()
+        # Ask Graph to return times already converted to the user's timezone.
+        hdrs["Prefer"] = f'outlook.timezone="{cfg.timezone}"'
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.request(method, f"{GRAPH}{path}", headers=hdrs, **kw)
+        except httpx.HTTPError as exc:
+            raise ToolError(f"Could not reach Microsoft Graph: {exc}") from exc
+
+        if resp.status_code == 403:
+            raise ToolError(
+                "Microsoft refused that (403). The app registration is probably missing a "
+                "permission -- re-run setup_microsoft.py to consent to the current scopes."
+            )
+        if resp.status_code >= 400:
+            detail = ""
+            try:
+                detail = resp.json().get("error", {}).get("message", "")
+            except Exception:
+                detail = resp.text[:300]
+            raise ToolError(f"Graph {resp.status_code}: {detail}")
+        return resp.json() if resp.content else {}
