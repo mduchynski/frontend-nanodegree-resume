@@ -27,7 +27,7 @@ def main() -> int:
         print("pywin32 is not installed. Run:  pip install -r requirements.txt")
         return 1
 
-    from tools.outlook_local import build_mail_filter, inbox
+    from tools.outlook_local import OBJ_MAIL, build_mail_filter, inbox
 
     pythoncom.CoInitialize()
     try:
@@ -72,7 +72,7 @@ def main() -> int:
         shown = 0
         for item in items:
             try:
-                if getattr(item, "Class", 0) != 43:  # olMail
+                if getattr(item, "Class", OBJ_MAIL) != OBJ_MAIL:
                     continue
                 flag = "UNREAD" if item.UnRead else "      "
                 print(f"  {flag}  {str(item.ReceivedTime)[:16]}  {str(item.Subject)[:46]}")
@@ -100,7 +100,7 @@ def main() -> int:
             count = 0
             for item in found:
                 try:
-                    if getattr(item, "Class", 0) != 43:
+                    if getattr(item, "Class", OBJ_MAIL) != OBJ_MAIL:
                         continue
                     print(f"      {str(item.ReceivedTime)[:16]}  {str(item.Subject)[:44]}")
                 except Exception:  # noqa: BLE001

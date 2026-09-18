@@ -23,11 +23,19 @@ from core.config import cfg, tz
 
 from .base import Tool, ToolError
 
-# Outlook object model constants (olFolderInbox, olFolderCalendar, ...).
+# Outlook object model constants.
 FOLDER_INBOX = 6
 FOLDER_CALENDAR = 9
+
+# OlItemType -- what CreateItem() takes when making a NEW item.
 ITEM_MAIL = 0
 ITEM_APPOINTMENT = 1
+
+# OlObjectClass -- what an EXISTING item's .Class property returns. A different
+# enumeration with different numbering: mail is 43 here and 0 there. Comparing
+# .Class against ITEM_MAIL silently matches nothing, because no object class is
+# 0, so every message gets skipped and the inbox looks empty.
+OBJ_MAIL = 43
 MEETING = 1          # olMeeting -- turns an appointment into an invite
 BUSY_FREE = 0        # olFree
 
@@ -297,7 +305,7 @@ class SearchWorkEmailTool(LocalOutlookTool):
         out: list[dict] = []
         for item in items:
             try:
-                if getattr(item, "Class", ITEM_MAIL) != ITEM_MAIL:
+                if getattr(item, "Class", OBJ_MAIL) != OBJ_MAIL:
                     continue  # meeting responses and receipts also live here
                 out.append({
                     "id": _text(item.EntryID),

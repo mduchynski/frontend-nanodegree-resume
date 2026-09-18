@@ -58,7 +58,9 @@ class FakeItems(list):
 
 
 class FakeMail:
-    Class = 0
+    # OlObjectClass.olMail. NOT OlItemType.olMailItem (0) -- .Class returns the
+    # former, and a fake using the latter hides a whole class of bug.
+    Class = 43
 
     def __init__(self, **kw):
         self.EntryID = kw.get("id", "E1")
@@ -274,9 +276,18 @@ async def tool_checks():
     check(when == sorted(when, reverse=True), "unfiltered results are newest-first too")
     APP.ns.mail = MAIL
 
+    print("\n=== ordinary mail is actually returned ===")
+    # The regression: .Class was compared against the wrong enum, so every
+    # message was skipped and the inbox always looked empty.
+    check(ol.OBJ_MAIL == 43, "uses OlObjectClass.olMail for an existing item")
+    check(ol.ITEM_MAIL == 0, "and OlItemType.olMailItem only for CreateItem")
+    out = await ol.SearchWorkEmailTool().run()
+    check("[id: E1]" in out, "a normal mail item comes back")
+    check(out.count("[id:") >= 2, "all of them, not none")
+
     print("\n=== non-mail items in the inbox are skipped ===")
     receipt = FakeMail(id="R1")
-    receipt.Class = 3   # a meeting response, not a MailItem
+    receipt.Class = 53  # OlObjectClass.olMeetingRequest, not a mail item
     APP.ns.mail = [receipt] + MAIL
     out = await ol.SearchWorkEmailTool().run()
     check("[id: R1]" not in out, "meeting responses filtered out")
