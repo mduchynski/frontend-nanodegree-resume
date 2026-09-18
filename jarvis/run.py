@@ -138,16 +138,20 @@ def main() -> None:
     print(f"  Email     : {'connected' if cfg.google_enabled else 'not set up'}")
     from tools import outlook_backend
 
+    backend = outlook_backend()
     work = {
         "graph": "Microsoft 365 (Graph)",
         "local": "Outlook desktop app",
-        "off": "not set up",
-    }[outlook_backend()]
+    }.get(backend, "not set up")
     print(f"  Work mail : {work}")
     print(f"  Calendar  : {work}")
     print(f"  Search    : {'Brave' if cfg.brave_api_key else 'DuckDuckGo (free fallback)'}")
     print(f"  Images    : {cfg.image_provider if cfg.images_enabled else 'not set up'}")
     print(f"  3D        : {'Tripo3D' if cfg.tripo_enabled else 'not set up'}")
+    if backend == "off" and sys.platform == "win32":
+        print("=" * 58)
+        print("  Work mail/calendar is off. For the local Outlook route run:")
+        print("      pip install -r requirements.txt")
     print("=" * 58)
     print("  Open in Microsoft Edge for the best voice.  Ctrl+C to stop.")
     print("=" * 58 + "\n")

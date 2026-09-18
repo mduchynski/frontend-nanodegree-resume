@@ -493,6 +493,7 @@ taking the whole assistant down.
 
 | Symptom | Cause |
 |---|---|
+| `ModuleNotFoundError: No module named 'win32com'` | `pywin32` is not installed. `start.bat` reinstalls automatically when `requirements.txt` changes, so a `git pull` then `start.bat` fixes it; or run `pip install -r requirements.txt` by hand. |
 | `ModuleNotFoundError: No module named 'uvicorn'` | The virtual environment is not active in this terminal, so Python cannot see what you installed into it. Run `.venv\Scripts\activate` first, or just use `start.bat`. |
 | `'python' is not recognized` | Python is not on PATH. Reinstall from python.org with "Add python.exe to PATH" ticked. |
 | "running scripts is disabled on this system" | PowerShell execution policy. See the note in step 1. |

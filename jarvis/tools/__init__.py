@@ -64,8 +64,11 @@ def outlook_backend() -> str:
         return mode
     if cfg.microsoft_enabled:
         return "graph"
-    if outlook_local.available():
-        return "local"
+    try:
+        if outlook_local.available():
+            return "local"
+    except Exception:  # noqa: BLE001 - never let capability detection be fatal
+        log.warning("could not check for the local Outlook app", exc_info=True)
     return "off"
 
 

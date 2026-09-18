@@ -164,7 +164,22 @@ ol._com = lambda fn, *a: asyncio.get_event_loop().run_in_executor(None, lambda: 
 # ---------------------------------------------------------------- pure logic
 
 def pure_checks():
-    print("=== DASL query building ===")
+    print("=== capability detection never raises ===")
+    # find_spec() on a dotted name imports the parent and raises when it is
+    # missing, which is exactly the case this check exists to detect.
+    try:
+        result = ol.available()
+        check(result is False, "reports unavailable off Windows / without pywin32")
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"available() raised {type(exc).__name__}")
+
+    import tools
+    try:
+        check(tools.outlook_backend() in ("graph", "local", "off"), "backend resolves to a known value")
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"outlook_backend() raised {type(exc).__name__}")
+
+    print("\n=== DASL query building ===")
     f = ol.build_mail_filter("invoice", False)
     check(f.startswith("@SQL="), "uses DASL")
     check("urn:schemas:httpmail:subject" in f and "textdescription" in f,

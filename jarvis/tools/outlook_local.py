@@ -37,12 +37,20 @@ OUTLOOK_DATE = "%m/%d/%Y %I:%M %p"
 
 
 def available() -> bool:
-    """True when this machine can actually drive Outlook."""
+    """True when this machine can actually drive Outlook.
+
+    Never raises. find_spec() on a dotted name imports the parent package
+    first and raises ModuleNotFoundError when it is missing -- so the obvious
+    spelling of this check blows up in exactly the case it exists to detect.
+    """
     if sys.platform != "win32":
         return False
     import importlib.util
 
-    return importlib.util.find_spec("win32com.client") is not None
+    try:
+        return importlib.util.find_spec("win32com.client") is not None
+    except (ImportError, AttributeError, ValueError):
+        return False
 
 
 # --------------------------------------------------------------------------

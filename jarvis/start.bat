@@ -39,8 +39,11 @@ if not exist "%VENV_PY%" (
     )
 )
 
-REM --- install dependencies if anything is missing -------------
-"%VENV_PY%" -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('uvicorn') else 1)" >nul 2>&1
+REM --- install dependencies whenever requirements.txt changes ---
+REM  Checking for one known package would miss anything added later, so this
+REM  compares requirements.txt against a stamp written after the last
+REM  successful install.
+"%VENV_PY%" -c "import pathlib,sys; r=pathlib.Path('requirements.txt'); s=pathlib.Path('.venv/requirements.stamp'); sys.exit(0 if s.exists() and s.read_text().strip()==str(r.stat().st_mtime_ns) else 1)" >nul 2>&1
 if errorlevel 1 (
     echo Installing dependencies. This takes a minute the first time...
     "%VENV_PY%" -m pip install --upgrade pip >nul
@@ -52,6 +55,7 @@ if errorlevel 1 (
         pause
         exit /b 1
     )
+    "%VENV_PY%" -c "import pathlib; pathlib.Path('.venv/requirements.stamp').write_text(str(pathlib.Path('requirements.txt').stat().st_mtime_ns))"
 )
 
 REM --- make sure there is a .env -------------------------------
